@@ -1,27 +1,36 @@
-# Workspace
+# Discord Bot
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+Single-folder Node.js Discord bot converted from TypeScript to plain JavaScript. The project uses npm only and runs with `node index.js`.
 
 ## Stack
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+- Node.js 24
+- npm
+- JavaScript ES modules
+- discord.js v14
+- PostgreSQL with Drizzle ORM
 
-## Key Commands
+## Commands
 
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
+- `npm install` — install dependencies
+- `node index.js` — run the bot
+- `npm start` — run the bot
+- `npm run db:push` — push the Drizzle schema to the configured PostgreSQL database
 
-See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+## Environment
+
+- `DISCORD_BOT_TOKEN` is required for the bot to log in to Discord.
+- `DATABASE_URL` is required for commands that store server settings, warnings, AFK status, giveaways, reminders, premium status, and automod settings.
+- `MESSAGE_CONTENT_INTENT_ENABLED=true` enables prefix commands that read message content.
+- `AI_INTEGRATIONS_OPENAI_API_KEY` and `AI_INTEGRATIONS_OPENAI_BASE_URL` enable translation commands.
+
+## Structure
+
+- `index.js` — app entry point
+- `commands/` — slash commands
+- `prefixCommands/` — prefix commands
+- `events/` — Discord event handlers
+- `utils/` — command loading, registration, permissions, cache helpers
+- `db/` — Drizzle database connection and schema
