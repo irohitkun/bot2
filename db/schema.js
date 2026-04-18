@@ -5,6 +5,13 @@ export const guildSettingsTable = pgTable("guild_settings", {
     noPrefixMode: boolean("no_prefix_mode").notNull().default(false),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+export const noPrefixAccessTable = pgTable("no_prefix_access", {
+    guildId: text("guild_id").notNull(),
+    targetId: text("target_id").notNull(),
+    targetType: text("target_type").notNull(),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.guildId, t.targetId, t.targetType] })]);
 export const warningsTable = pgTable("warnings", {
     id: serial("id").primaryKey(),
     guildId: text("guild_id").notNull(),

@@ -34,3 +34,10 @@ Single-folder Node.js Discord bot converted from TypeScript to plain JavaScript.
 - `events/` — Discord event handlers
 - `utils/` — command loading, registration, permissions, cache helpers
 - `db/` — Drizzle database connection and schema
+
+## Premium No-Prefix Access
+
+- No-prefix mode is a premium server feature managed with `/noprefix`.
+- Only the server owner or bot owner can manage no-prefix settings and access.
+- When no-prefix mode is enabled, the server owner always has access; other members must be added directly or have an allowed role.
+- The `no_prefix_access` table stores allowed users and roles.

@@ -3,6 +3,7 @@ import { readdirSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { getPrefix, getNoPrefixMode } from "../utils/prefixCache.js";
+import { canUseNoPrefix } from "../utils/noPrefixAccess.js";
 import { db, afkUsersTable, automodSettingsTable } from "../db/index.js";
 import { eq, and } from "drizzle-orm";
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -98,6 +99,9 @@ export async function execute(message) {
         const parts = message.content.trim().split(/\s+/);
         const potentialCmd = parts[0]?.toLowerCase();
         if (prefixCommands.has(potentialCmd)) {
+            const allowed = await canUseNoPrefix(message.member);
+            if (!allowed)
+                return;
             commandName = parts.shift()?.toLowerCase();
             args = parts;
         }
