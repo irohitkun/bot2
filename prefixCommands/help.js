@@ -1,52 +1,34 @@
 import { EmbedBuilder } from "discord.js";
+import { helpCategories, getHelpCategory, formatCommands } from "../utils/helpCatalog.js";
+import { getPrefix } from "../utils/prefixCache.js";
+
 export const command = {
     name: "help",
-    usage: "%help",
+    usage: "%help [category]",
     description: "Show all available prefix commands",
-    async execute(message) {
+    async execute(message, args = []) {
+        const prefix = await getPrefix(message.guild.id);
+        const selected = args[0]?.toLowerCase();
+        const category = selected ? getHelpCategory(selected) : null;
         const embed = new EmbedBuilder()
             .setColor(0x5865f2)
-            .setTitle("🤖 Bot Commands — % Prefix")
-            .setDescription("All commands also work as slash commands (`/command`).")
-            .addFields({
-            name: "🔨 Moderation",
-            value: [
-                "`%ban @user [reason]` — Ban a member",
-                "`%kick @user [reason]` — Kick a member",
-                "`%mute @user <10m/1h/2d> [reason]` — Timeout a member",
-                "`%unmute @user [reason]` — Remove timeout",
-                "`%unban <userID> [reason]` — Unban a user",
-            ].join("\n"),
-        }, {
-            name: "⚠️ Warnings",
-            value: [
-                "`%warn @user <reason>` — Warn a member",
-                "`%warnings @user` — View member warnings",
-                "`%clearwarn @user` — Clear all warnings",
-            ].join("\n"),
-        }, {
-            name: "🗑️ Channel",
-            value: [
-                "`%purge <1-100> [@user]` — Bulk delete messages",
-                "`%slowmode <seconds>` — Set slowmode (0 = off)",
-                "`%lock [reason]` — Lock the channel",
-                "`%unlock` — Unlock the channel",
-            ].join("\n"),
-        }, {
-            name: "ℹ️ Info",
-            value: [
-                "`%userinfo [@user]` — View user info",
-                "`%serverinfo` — View server info",
-            ].join("\n"),
-        }, {
-            name: "🌐 Translation",
-            value: "`%translate <language> <text>` — Translate text\nExample: `%translate spanish Hello world`",
-        }, {
-            name: "🔗 Other",
-            value: "`%invite` — Get the bot invite link\n`%setprefix <new>` — Change the prefix",
-        })
-            .setFooter({ text: "Prefix: %   |   All commands require appropriate permissions" })
+            .setTitle(category ? `${category.label} Commands` : "Bot Help Center")
+            .setDescription(`Use slash commands with \`/\` or prefix commands with \`${prefix}\`.`)
             .setTimestamp();
+
+        if (selected && !category) {
+            return message.reply(`Unknown category. Try: ${helpCategories.map((item) => `\`${item.key}\``).join(", ")}`);
+        }
+
+        if (category) {
+            embed.addFields({ name: category.label, value: formatCommands(category.commands, prefix) });
+        } else {
+            for (const item of helpCategories) {
+                embed.addFields({ name: item.label, value: formatCommands(item.commands.slice(0, 6), prefix) });
+            }
+            embed.setFooter({ text: `${prefix}help <category> for a full category.` });
+        }
+
         await message.reply({ embeds: [embed] });
     },
 };

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean, integer, primaryKey, } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, integer, primaryKey, uniqueIndex, } from "drizzle-orm/pg-core";
 
 export const guildSettingsTable = pgTable("guild_settings", {
     guildId: text("guild_id").primaryKey(),
@@ -72,6 +72,19 @@ export const afkUsersTable = pgTable("afk_users", {
     setAt: timestamp("set_at").notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.userId, t.guildId] })]);
 
+export const memberStatsTable = pgTable("member_stats", {
+    guildId: text("guild_id").notNull(),
+    userId: text("user_id").notNull(),
+    userTag: text("user_tag").notNull(),
+    xp: integer("xp").notNull().default(0),
+    level: integer("level").notNull().default(1),
+    coins: integer("coins").notNull().default(0),
+    dailyStreak: integer("daily_streak").notNull().default(0),
+    lastDailyAt: timestamp("last_daily_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.guildId, t.userId] })]);
+
 export const serverCustomizationTable = pgTable("server_customization", {
     guildId: text("guild_id").primaryKey(),
     embedColor: text("embed_color").notNull().default("5865f2"),
@@ -132,4 +145,4 @@ export const reactionRolesTable = pgTable("reaction_roles", {
     roleId: text("role_id").notNull(),
     createdBy: text("created_by").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
-}, (t) => [primaryKey({ columns: [t.messageId, t.emoji] })]);
+}, (t) => [uniqueIndex("reaction_roles_message_emoji_unique").on(t.messageId, t.emoji)]);
