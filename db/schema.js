@@ -36,6 +36,8 @@ export const premiumGuildsTable = pgTable("premium_guilds", {
     notes: text("notes"),
     isTrial: boolean("is_trial").notNull().default(false),
     reminderSent: boolean("reminder_sent").notNull().default(false),
+    // UID to DM when subscription is expiring / expired (defaults to guild owner if null)
+    notifyUserId: text("notify_user_id"),
 });
 
 export const automodSettingsTable = pgTable("automod_settings", {

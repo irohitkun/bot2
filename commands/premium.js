@@ -39,6 +39,10 @@ export const data = new SlashCommandBuilder()
                         { name: "Pro", value: "pro" },
                         { name: "Enterprise", value: "enterprise" },
                     ))
+            .addStringOption((opt) =>
+                opt.setName("notify_user_id")
+                    .setDescription("User ID to DM when subscription expires (defaults to guild owner)")
+                    .setRequired(false))
             .addStringOption((opt) => opt.setName("notes").setDescription("Internal notes").setRequired(false)))
     .addSubcommand((sub) =>
         sub.setName("deactivate")
@@ -61,7 +65,6 @@ export async function execute(interaction) {
     if (sub === "tiers") return handleTiers(interaction);
     if (sub === "status") return handleStatus(interaction);
 
-    // Activate / deactivate / list — bot owner only
     if (!isBotOwner(interaction.user.id)) {
         return interaction.reply({ content: "❌ This command is restricted to bot owners only.", flags: 64 });
     }
@@ -86,6 +89,7 @@ async function handleActivate(interaction) {
     const duration = interaction.options.getString("duration");
     const tier = interaction.options.getString("tier") ?? "basic";
     const notes = interaction.options.getString("notes");
+    const notifyUserId = interaction.options.getString("notify_user_id")?.trim() ?? null;
 
     let expiresAt;
     try {
@@ -96,13 +100,13 @@ async function handleActivate(interaction) {
 
     await db.insert(premiumGuildsTable).values({
         guildId, activatedBy: interaction.user.id, activatedByTag: interaction.user.tag,
-        tier, expiresAt, notes: notes ?? undefined, isTrial: false, reminderSent: false,
+        tier, expiresAt, notes: notes ?? undefined, isTrial: false, reminderSent: false, notifyUserId,
     }).onConflictDoUpdate({
         target: premiumGuildsTable.guildId,
         set: {
             activatedBy: interaction.user.id, activatedByTag: interaction.user.tag,
             activatedAt: new Date(), tier, expiresAt, notes: notes ?? undefined,
-            isTrial: false, reminderSent: false,
+            isTrial: false, reminderSent: false, notifyUserId,
         },
     });
 
@@ -116,12 +120,12 @@ async function handleActivate(interaction) {
             { name: "Tier", value: `${TIER_ICONS[tier] ?? ""} ${tier}`, inline: true },
             { name: "Expires", value: expiresAt ? `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>` : "Never", inline: true },
             { name: "Activated By", value: interaction.user.tag, inline: true },
+            { name: "Notify On Expiry", value: notifyUserId ? `<@${notifyUserId}>` : "Guild owner (auto)", inline: true },
         )
         .setTimestamp();
 
     if (notes) embed.addFields({ name: "Notes", value: notes });
 
-    // Public — visible to the channel
     return interaction.reply({ embeds: [embed] });
 }
 
@@ -143,7 +147,6 @@ async function handleDeactivate(interaction) {
         )
         .setTimestamp();
 
-    // Public — visible to the channel
     return interaction.reply({ embeds: [embed] });
 }
 
@@ -152,7 +155,7 @@ async function handleStatus(interaction) {
     if (!guildId) return interaction.reply({ content: "❌ Provide a guild ID or use this in a server.", flags: 64 });
 
     const [row] = await db.select().from(premiumGuildsTable).where(eq(premiumGuildsTable.guildId, guildId));
-    if (!row) return interaction.reply({ content: `❌ This server does not have an active premium subscription. Use \`/freetrial\` to start a free 7-day trial!`, flags: 64 });
+    if (!row) return interaction.reply({ content: `❌ This server does not have an active premium subscription. Use \`/freetrial\` for a free 7-day trial!`, flags: 64 });
 
     const expired = row.expiresAt && row.expiresAt.getTime() <= Date.now();
 
@@ -171,9 +174,7 @@ async function handleStatus(interaction) {
     if (row.notes) embed.addFields({ name: "Notes", value: row.notes });
 
     const features = TIER_FEATURES[expired ? "free" : row.tier];
-    if (features) {
-        embed.addFields({ name: `What's included`, value: features.map((f) => `• ${f}`).join("\n") });
-    }
+    if (features) embed.addFields({ name: "What's included", value: features.map((f) => `• ${f}`).join("\n") });
 
     return interaction.reply({ embeds: [embed], flags: 64 });
 }
@@ -189,7 +190,7 @@ async function handleList(interaction) {
             const expired = r.expiresAt && r.expiresAt.getTime() <= Date.now();
             const expiry = r.expiresAt ? `<t:${Math.floor(r.expiresAt.getTime() / 1000)}:R>` : "Never";
             const icon = TIER_ICONS[r.tier] ?? "⭐";
-            const trial = r.isTrial ? " 🆕Trial" : "";
+            const trial = r.isTrial ? " 🆕 Trial" : "";
             return `\`${r.guildId}\` — ${icon} **${r.tier}**${trial} — ${expired ? "❌ Expired" : "✅ Active"} — Expires: ${expiry}`;
         }).join("\n"))
         .setTimestamp();
