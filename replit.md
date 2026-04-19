@@ -25,6 +25,7 @@ Single-folder Node.js Discord bot converted from TypeScript to plain JavaScript.
 - `DATABASE_URL` is required for commands that store server settings, warnings, AFK status, giveaways, reminders, premium status, and automod settings.
 - `MESSAGE_CONTENT_INTENT_ENABLED=true` enables prefix commands that read message content.
 - `AI_INTEGRATIONS_OPENAI_API_KEY` and `AI_INTEGRATIONS_OPENAI_BASE_URL` enable translation commands.
+- `GITHUB_TOKEN` may be used temporarily for pushing code to GitHub if GitHub account connection is not available.
 
 ## Structure
 
