@@ -12,12 +12,17 @@ export function isBotOwner(userId) {
     return owners.includes(userId);
 }
 export async function isPremiumGuild(guildId) {
-    if (premiumCache.has(guildId))
-        return premiumCache.get(guildId);
+    const cached = premiumCache.get(guildId);
+    if (cached) {
+        if (!cached.expiresAt || cached.expiresAt > Date.now())
+            return cached.active;
+        premiumCache.delete(guildId);
+    }
     const [row] = await db.select().from(premiumGuildsTable).where(eq(premiumGuildsTable.guildId, guildId));
-    const result = !!row;
-    premiumCache.set(guildId, result);
-    return result;
+    const expiresAt = row?.expiresAt?.getTime() ?? null;
+    const active = !!row && (!expiresAt || expiresAt > Date.now());
+    premiumCache.set(guildId, { active, expiresAt });
+    return active;
 }
 export function invalidatePremiumCache(guildId) {
     premiumCache.delete(guildId);

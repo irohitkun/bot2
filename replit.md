@@ -41,3 +41,4 @@ Single-folder Node.js Discord bot converted from TypeScript to plain JavaScript.
 - Only the server owner or bot owner can manage no-prefix settings and access.
 - When no-prefix mode is enabled, the server owner always has access; other members must be added directly or have an allowed role.
 - The `no_prefix_access` table stores allowed users and roles.
+- `/premium activate` supports optional duration values like `7d`, `2w`, `1m`, `1y`, or `permanent`; expired premium guilds are treated as inactive.
