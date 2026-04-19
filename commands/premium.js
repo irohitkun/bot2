@@ -3,6 +3,9 @@ import { db, premiumGuildsTable } from "../db/index.js";
 import { eq } from "drizzle-orm";
 import { isBotOwner, invalidatePremiumCache, TIER_FEATURES } from "../utils/permissions.js";
 
+const TIER_ICONS  = { free: "🔓", basic: "⭐", pro: "💎", enterprise: "👑" };
+const TIER_COLORS = { free: 0x95a5a6, basic: 0xf1c40f, pro: 0x3498db, enterprise: 0x9b59b6 };
+
 function parsePremiumDuration(input) {
     if (!input) return null;
     const value = input.trim().toLowerCase();
@@ -43,7 +46,7 @@ export const data = new SlashCommandBuilder()
             .addStringOption((opt) => opt.setName("guild_id").setDescription("Guild ID").setRequired(true)))
     .addSubcommand((sub) =>
         sub.setName("status")
-            .setDescription("Check premium status of a server")
+            .setDescription("Check premium status of this server")
             .addStringOption((opt) => opt.setName("guild_id").setDescription("Guild ID (defaults to current server)").setRequired(false)))
     .addSubcommand((sub) =>
         sub.setName("list")
@@ -56,30 +59,26 @@ export async function execute(interaction) {
     const sub = interaction.options.getSubcommand();
 
     if (sub === "tiers") return handleTiers(interaction);
+    if (sub === "status") return handleStatus(interaction);
 
-    // All other subcommands require bot owner
+    // Activate / deactivate / list — bot owner only
     if (!isBotOwner(interaction.user.id)) {
         return interaction.reply({ content: "❌ This command is restricted to bot owners only.", flags: 64 });
     }
 
     if (sub === "activate") return handleActivate(interaction);
     if (sub === "deactivate") return handleDeactivate(interaction);
-    if (sub === "status") return handleStatus(interaction);
     if (sub === "list") return handleList(interaction);
 }
 
 async function handleTiers(interaction) {
-    const TIER_ICONS = { free: "🔓", basic: "⭐", pro: "💎", enterprise: "👑" };
-    const TIER_COLORS = { free: 0x95a5a6, basic: 0xf1c40f, pro: 0x3498db, enterprise: 0x9b59b6 };
-
-    const embeds = Object.entries(TIER_FEATURES).map(([tier, features]) => {
-        return new EmbedBuilder()
+    const embeds = Object.entries(TIER_FEATURES).map(([tier, features]) =>
+        new EmbedBuilder()
             .setColor(TIER_COLORS[tier])
             .setTitle(`${TIER_ICONS[tier]} ${tier.charAt(0).toUpperCase() + tier.slice(1)} Tier`)
-            .setDescription(features.map((f) => `• ${f}`).join("\n"));
-    });
-
-    return interaction.reply({ embeds, flags: 64 });
+            .setDescription(features.map((f) => `• ${f}`).join("\n"))
+    );
+    return interaction.reply({ embeds });
 }
 
 async function handleActivate(interaction) {
@@ -96,38 +95,56 @@ async function handleActivate(interaction) {
     }
 
     await db.insert(premiumGuildsTable).values({
-        guildId, activatedBy: interaction.user.id, activatedByTag: interaction.user.tag, tier, expiresAt, notes: notes ?? undefined,
+        guildId, activatedBy: interaction.user.id, activatedByTag: interaction.user.tag,
+        tier, expiresAt, notes: notes ?? undefined, isTrial: false, reminderSent: false,
     }).onConflictDoUpdate({
         target: premiumGuildsTable.guildId,
-        set: { activatedBy: interaction.user.id, activatedByTag: interaction.user.tag, activatedAt: new Date(), tier, expiresAt, notes: notes ?? undefined },
+        set: {
+            activatedBy: interaction.user.id, activatedByTag: interaction.user.tag,
+            activatedAt: new Date(), tier, expiresAt, notes: notes ?? undefined,
+            isTrial: false, reminderSent: false,
+        },
     });
 
     invalidatePremiumCache(guildId);
 
-    const TIER_ICONS = { basic: "⭐", pro: "💎", enterprise: "👑" };
     const embed = new EmbedBuilder()
-        .setColor(0xf1c40f)
+        .setColor(TIER_COLORS[tier] ?? 0xf1c40f)
         .setTitle(`${TIER_ICONS[tier] ?? "⭐"} Premium Activated`)
         .addFields(
             { name: "Guild ID", value: guildId, inline: true },
             { name: "Tier", value: `${TIER_ICONS[tier] ?? ""} ${tier}`, inline: true },
             { name: "Expires", value: expiresAt ? `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>` : "Never", inline: true },
-            { name: "By", value: interaction.user.tag, inline: true },
+            { name: "Activated By", value: interaction.user.tag, inline: true },
         )
         .setTimestamp();
 
     if (notes) embed.addFields({ name: "Notes", value: notes });
 
-    return interaction.reply({ embeds: [embed], flags: 64 });
+    // Public — visible to the channel
+    return interaction.reply({ embeds: [embed] });
 }
 
 async function handleDeactivate(interaction) {
     const guildId = interaction.options.getString("guild_id", true).trim();
     const [existing] = await db.select().from(premiumGuildsTable).where(eq(premiumGuildsTable.guildId, guildId));
-    if (!existing) return interaction.reply({ content: "That guild does not have premium.", flags: 64 });
+    if (!existing) return interaction.reply({ content: `❌ Guild \`${guildId}\` does not have an active premium subscription.`, flags: 64 });
+
     await db.delete(premiumGuildsTable).where(eq(premiumGuildsTable.guildId, guildId));
     invalidatePremiumCache(guildId);
-    return interaction.reply({ content: `✅ Premium deactivated for guild \`${guildId}\`.`, flags: 64 });
+
+    const embed = new EmbedBuilder()
+        .setColor(0xe74c3c)
+        .setTitle("🔴 Premium Deactivated")
+        .addFields(
+            { name: "Guild ID", value: guildId, inline: true },
+            { name: "Was Tier", value: `${TIER_ICONS[existing.tier] ?? ""} ${existing.tier}`, inline: true },
+            { name: "Deactivated By", value: interaction.user.tag, inline: true },
+        )
+        .setTimestamp();
+
+    // Public — visible to the channel
+    return interaction.reply({ embeds: [embed] });
 }
 
 async function handleStatus(interaction) {
@@ -135,17 +152,14 @@ async function handleStatus(interaction) {
     if (!guildId) return interaction.reply({ content: "❌ Provide a guild ID or use this in a server.", flags: 64 });
 
     const [row] = await db.select().from(premiumGuildsTable).where(eq(premiumGuildsTable.guildId, guildId));
-    if (!row) return interaction.reply({ content: `❌ Guild \`${guildId}\` does not have premium.`, flags: 64 });
+    if (!row) return interaction.reply({ content: `❌ This server does not have an active premium subscription. Use \`/freetrial\` to start a free 7-day trial!`, flags: 64 });
 
     const expired = row.expiresAt && row.expiresAt.getTime() <= Date.now();
-    const TIER_ICONS = { free: "🔓", basic: "⭐", pro: "💎", enterprise: "👑" };
-    const TIER_COLORS = { basic: 0xf1c40f, pro: 0x3498db, enterprise: 0x9b59b6 };
 
     const embed = new EmbedBuilder()
         .setColor(expired ? 0x95a5a6 : (TIER_COLORS[row.tier] ?? 0xf1c40f))
-        .setTitle(`${TIER_ICONS[row.tier] ?? "⭐"} Premium Status`)
+        .setTitle(`${TIER_ICONS[row.tier] ?? "⭐"} Premium Status${row.isTrial ? " (Free Trial)" : ""}`)
         .addFields(
-            { name: "Guild ID", value: row.guildId, inline: true },
             { name: "Tier", value: `${TIER_ICONS[row.tier] ?? ""} ${row.tier}`, inline: true },
             { name: "Status", value: expired ? "❌ Expired" : "✅ Active", inline: true },
             { name: "Expires", value: row.expiresAt ? `<t:${Math.floor(row.expiresAt.getTime() / 1000)}:R>` : "Never", inline: true },
@@ -156,10 +170,9 @@ async function handleStatus(interaction) {
 
     if (row.notes) embed.addFields({ name: "Notes", value: row.notes });
 
-    // Show features for the tier
     const features = TIER_FEATURES[expired ? "free" : row.tier];
     if (features) {
-        embed.addFields({ name: `What's included (${expired ? "free" : row.tier})`, value: features.map((f) => `• ${f}`).join("\n") });
+        embed.addFields({ name: `What's included`, value: features.map((f) => `• ${f}`).join("\n") });
     }
 
     return interaction.reply({ embeds: [embed], flags: 64 });
@@ -169,8 +182,6 @@ async function handleList(interaction) {
     const rows = await db.select().from(premiumGuildsTable);
     if (rows.length === 0) return interaction.reply({ content: "No premium guilds found.", flags: 64 });
 
-    const TIER_ICONS = { basic: "⭐", pro: "💎", enterprise: "👑" };
-
     const embed = new EmbedBuilder()
         .setColor(0xf1c40f)
         .setTitle(`⭐ Premium Guilds (${rows.length})`)
@@ -178,7 +189,8 @@ async function handleList(interaction) {
             const expired = r.expiresAt && r.expiresAt.getTime() <= Date.now();
             const expiry = r.expiresAt ? `<t:${Math.floor(r.expiresAt.getTime() / 1000)}:R>` : "Never";
             const icon = TIER_ICONS[r.tier] ?? "⭐";
-            return `\`${r.guildId}\` — ${icon} **${r.tier}** — ${expired ? "❌ Expired" : "✅ Active"} — Expires: ${expiry}`;
+            const trial = r.isTrial ? " 🆕Trial" : "";
+            return `\`${r.guildId}\` — ${icon} **${r.tier}**${trial} — ${expired ? "❌ Expired" : "✅ Active"} — Expires: ${expiry}`;
         }).join("\n"))
         .setTimestamp();
 

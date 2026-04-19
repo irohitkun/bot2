@@ -34,6 +34,8 @@ export const premiumGuildsTable = pgTable("premium_guilds", {
     expiresAt: timestamp("expires_at"),
     tier: text("tier").notNull().default("basic"),
     notes: text("notes"),
+    isTrial: boolean("is_trial").notNull().default(false),
+    reminderSent: boolean("reminder_sent").notNull().default(false),
 });
 
 export const automodSettingsTable = pgTable("automod_settings", {
