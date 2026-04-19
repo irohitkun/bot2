@@ -1,16 +1,5 @@
 import { SlashCommandBuilder, EmbedBuilder, } from "discord.js";
-import OpenAI from "openai";
-let openai;
-function getOpenAI() {
-    if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
-        return null;
-    }
-    openai ??= new OpenAI({
-        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-    });
-    return openai;
-}
+import { createAIChatCompletion, getAIStatus } from "../utils/aiProvider.js";
 const LANGUAGES = {
     english: "English",
     spanish: "Spanish",
@@ -58,16 +47,15 @@ export async function execute(interaction) {
     const toLang = LANGUAGES[toKey] ?? "English";
     const fromLang = fromKey ? LANGUAGES[fromKey] : null;
     await interaction.deferReply();
-    const client = getOpenAI();
-    if (!client) {
-        return interaction.editReply("Translation needs AI_INTEGRATIONS_OPENAI_API_KEY to be set.");
+    const aiStatus = getAIStatus();
+    if (!aiStatus.ready) {
+        return interaction.editReply(`Translation is not configured: ${aiStatus.message}`);
     }
     const systemPrompt = fromLang
         ? `You are a professional translator. Translate the following text from ${fromLang} to ${toLang}. Return only the translated text, nothing else.`
         : `You are a professional translator. Detect the language of the following text and translate it to ${toLang}. Return only the translated text, nothing else.`;
-    const response = await client.chat.completions.create({
-        model: "gpt-4o-mini",
-        max_completion_tokens: 1024,
+    const response = await createAIChatCompletion({
+        maxTokens: 1024,
         messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: text },
@@ -82,7 +70,7 @@ export async function execute(interaction) {
         .setColor(0x5865f2)
         .setTitle("🌐 Translation")
         .addFields({ name: "Original", value: text.length > 1024 ? text.slice(0, 1021) + "..." : text }, { name: `Translated to ${toLang}`, value: translated.length > 1024 ? translated.slice(0, 1021) + "..." : translated })
-        .setFooter({ text: `${detectedInfo} → ${toLang} • Requested by ${interaction.user.tag}` })
+        .setFooter({ text: `${detectedInfo} → ${toLang} • ${aiStatus.provider}/${aiStatus.model} • Requested by ${interaction.user.tag}` })
         .setTimestamp();
     await interaction.editReply({ embeds: [embed] });
 }

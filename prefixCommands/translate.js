@@ -1,16 +1,5 @@
 import { EmbedBuilder } from "discord.js";
-import OpenAI from "openai";
-let openai;
-function getOpenAI() {
-    if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
-        return null;
-    }
-    openai ??= new OpenAI({
-        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-    });
-    return openai;
-}
+import { createAIChatCompletion, getAIStatus } from "../utils/aiProvider.js";
 const LANGUAGE_MAP = {
     english: "English", en: "English",
     spanish: "Spanish", es: "Spanish",
@@ -60,13 +49,12 @@ export const command = {
             return void message.reply(`Usage:\n\`%translate <text>\` — translate to English\n\`%translate <language> <text>\` — translate to a specific language\nOr reply to any message with \`%translate\` or \`%translate <language>\``);
         }
         await message.channel.sendTyping().catch(() => { });
-        const client = getOpenAI();
-        if (!client) {
-            return void message.reply("Translation needs AI_INTEGRATIONS_OPENAI_API_KEY to be set.");
+        const aiStatus = getAIStatus();
+        if (!aiStatus.ready) {
+            return void message.reply(`Translation is not configured: ${aiStatus.message}`);
         }
-        const response = await client.chat.completions.create({
-            model: "gpt-4o-mini",
-            max_completion_tokens: 1024,
+        const response = await createAIChatCompletion({
+            maxTokens: 1024,
             messages: [
                 {
                     role: "system",
@@ -82,7 +70,7 @@ export const command = {
             .setColor(0x5865f2)
             .setTitle("🌐 Translation")
             .addFields({ name: "Original", value: text.length > 1024 ? text.slice(0, 1021) + "..." : text }, { name: `Translated to ${toLang}`, value: translated.length > 1024 ? translated.slice(0, 1021) + "..." : translated })
-            .setFooter({ text: `Requested by ${message.author.tag}` })
+            .setFooter({ text: `${aiStatus.provider}/${aiStatus.model} • Requested by ${message.author.tag}` })
             .setTimestamp();
         await message.reply({ embeds: [embed] });
     },

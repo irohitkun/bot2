@@ -24,7 +24,9 @@ Single-folder Node.js Discord bot converted from TypeScript to plain JavaScript.
 - `DISCORD_BOT_TOKEN` is required for the bot to log in to Discord.
 - `DATABASE_URL` is required for commands that store server settings, warnings, AFK status, giveaways, reminders, premium status, and automod settings.
 - `MESSAGE_CONTENT_INTENT_ENABLED=true` enables prefix commands that read message content.
-- `AI_INTEGRATIONS_OPENAI_API_KEY` and `AI_INTEGRATIONS_OPENAI_BASE_URL` enable translation commands.
+- AI commands automatically prefer Groq when `GROQ_API_KEY` exists, then fall back to OpenAI. `AI_PROVIDER` is optional and can force `groq` or `openai`.
+- For OpenAI, set `AI_INTEGRATIONS_OPENAI_API_KEY` or `OPENAI_API_KEY`; optional `AI_INTEGRATIONS_OPENAI_BASE_URL`, `OPENAI_BASE_URL`, and `OPENAI_MODEL`.
+- For Groq, set `GROQ_API_KEY`; optional `GROQ_BASE_URL` and `GROQ_MODEL`.
 - `GITHUB_TOKEN` may be used temporarily for pushing code to GitHub if GitHub account connection is not available.
 
 ## Structure
