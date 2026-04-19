@@ -1,5 +1,5 @@
 import { EmbedBuilder } from "discord.js";
-const INVITE_URL = "https://discord.com/oauth2/authorize?client_id=1482403011144843366&permissions=8&integration_type=0&scope=bot";
+const INVITE_URL = "https://discord.com/oauth2/authorize?client_id=1482403011144843366&permissions=8&integration_type=0&scope=bot+applications.commands";
 export const command = {
     name: "invite",
     usage: "%invite",
