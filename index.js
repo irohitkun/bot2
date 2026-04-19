@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { Client, GatewayIntentBits, Collection } from "discord.js";
+import { Client, GatewayIntentBits, Partials, Collection } from "discord.js";
 import { createServer, get as httpGet } from "http";
 import { loadCommands } from "./utils/loadCommands.js";
 import { loadEvents } from "./utils/loadEvents.js";
@@ -9,8 +9,12 @@ export const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildModeration,
+        GatewayIntentBits.GuildMessageReactions,
+        GatewayIntentBits.GuildMembers,
         ...(process.env.MESSAGE_CONTENT_INTENT_ENABLED === "true" ? [GatewayIntentBits.MessageContent] : []),
     ],
+    // Partials are required to receive reactions on messages sent before the bot started
+    partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
 
 export const commands = new Collection();
@@ -21,8 +25,7 @@ function startKeepAliveServer() {
         if (req.url === "/ping" || req.url === "/") {
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ status: "ok", bot: client.user?.tag ?? "starting", uptime: process.uptime() }));
-        }
-        else {
+        } else {
             res.writeHead(404);
             res.end("Not found");
         }

@@ -1,10 +1,12 @@
 import { pgTable, text, serial, timestamp, boolean, integer, primaryKey, } from "drizzle-orm/pg-core";
+
 export const guildSettingsTable = pgTable("guild_settings", {
     guildId: text("guild_id").primaryKey(),
     prefix: text("prefix").notNull().default("%"),
     noPrefixMode: boolean("no_prefix_mode").notNull().default(false),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
 export const noPrefixAccessTable = pgTable("no_prefix_access", {
     guildId: text("guild_id").notNull(),
     targetId: text("target_id").notNull(),
@@ -12,6 +14,7 @@ export const noPrefixAccessTable = pgTable("no_prefix_access", {
     createdBy: text("created_by").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.guildId, t.targetId, t.targetType] })]);
+
 export const warningsTable = pgTable("warnings", {
     id: serial("id").primaryKey(),
     guildId: text("guild_id").notNull(),
@@ -22,6 +25,7 @@ export const warningsTable = pgTable("warnings", {
     reason: text("reason").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
 export const premiumGuildsTable = pgTable("premium_guilds", {
     guildId: text("guild_id").primaryKey(),
     activatedBy: text("activated_by").notNull(),
@@ -31,6 +35,7 @@ export const premiumGuildsTable = pgTable("premium_guilds", {
     tier: text("tier").notNull().default("basic"),
     notes: text("notes"),
 });
+
 export const automodSettingsTable = pgTable("automod_settings", {
     guildId: text("guild_id").primaryKey(),
     enabled: boolean("enabled").notNull().default(false),
@@ -41,6 +46,7 @@ export const automodSettingsTable = pgTable("automod_settings", {
     antiSpamEnabled: boolean("anti_spam_enabled").notNull().default(false),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
 export const giveawaysTable = pgTable("giveaways", {
     id: serial("id").primaryKey(),
     guildId: text("guild_id").notNull(),
@@ -54,12 +60,14 @@ export const giveawaysTable = pgTable("giveaways", {
     ended: boolean("ended").notNull().default(false),
     winners: text("winners").notNull().default(""),
 });
+
 export const afkUsersTable = pgTable("afk_users", {
     userId: text("user_id").notNull(),
     guildId: text("guild_id").notNull(),
     reason: text("reason").notNull().default("AFK"),
     setAt: timestamp("set_at").notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.userId, t.guildId] })]);
+
 export const serverCustomizationTable = pgTable("server_customization", {
     guildId: text("guild_id").primaryKey(),
     embedColor: text("embed_color").notNull().default("5865f2"),
@@ -69,6 +77,7 @@ export const serverCustomizationTable = pgTable("server_customization", {
     logChannelId: text("log_channel_id"),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
 export const remindersTable = pgTable("reminders", {
     id: serial("id").primaryKey(),
     userId: text("user_id").notNull(),
@@ -78,3 +87,45 @@ export const remindersTable = pgTable("reminders", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
     sent: boolean("sent").notNull().default(false),
 });
+
+// ── Ticket System ────────────────────────────────────────────────────────────
+
+export const ticketSettingsTable = pgTable("ticket_settings", {
+    guildId: text("guild_id").primaryKey(),
+    categoryId: text("category_id"),
+    transcriptChannelId: text("transcript_channel_id"),
+    supportRoleId: text("support_role_id"),
+    panelChannelId: text("panel_channel_id"),
+    panelMessageId: text("panel_message_id"),
+    panelTitle: text("panel_title").notNull().default("Support Tickets"),
+    panelDescription: text("panel_description").notNull().default("Click the button below to open a support ticket."),
+    ticketCount: integer("ticket_count").notNull().default(0),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const ticketsTable = pgTable("tickets", {
+    id: serial("id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    channelId: text("channel_id").notNull(),
+    userId: text("user_id").notNull(),
+    userTag: text("user_tag").notNull(),
+    ticketNumber: integer("ticket_number").notNull(),
+    status: text("status").notNull().default("open"),
+    closedBy: text("closed_by"),
+    closedByTag: text("closed_by_tag"),
+    closedAt: timestamp("closed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ── Reaction Roles ───────────────────────────────────────────────────────────
+
+export const reactionRolesTable = pgTable("reaction_roles", {
+    id: serial("id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    channelId: text("channel_id").notNull(),
+    messageId: text("message_id").notNull(),
+    emoji: text("emoji").notNull(),
+    roleId: text("role_id").notNull(),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.messageId, t.emoji] })]);

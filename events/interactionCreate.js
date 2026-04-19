@@ -1,30 +1,191 @@
-import { Events } from "discord.js";
+import { Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits } from "discord.js";
 import { commands } from "../index.js";
+import { db } from "../db/index.js";
+import { ticketSettingsTable, ticketsTable } from "../db/schema.js";
+import { eq, and } from "drizzle-orm";
+import { getGuildStyle } from "../utils/guildStyle.js";
+
 export const name = Events.InteractionCreate;
 export const once = false;
+
 export async function execute(interaction) {
-    if (!interaction.isChatInputCommand())
-        return;
-    if (!interaction.guild) {
-        await interaction.reply({ content: "❌ This command can only be used inside a server.", flags: 64 }).catch(() => { });
-        return;
-    }
-    const command = commands.get(interaction.commandName);
-    if (!command) {
-        console.warn(`Unknown command: ${interaction.commandName}`);
-        return;
-    }
-    try {
-        await command.execute(interaction);
-    }
-    catch (err) {
-        console.error(`Error executing /${interaction.commandName}:`, err);
-        const msg = { content: "❌ An error occurred while running this command.", flags: 64 };
-        if (interaction.replied || interaction.deferred) {
-            await interaction.followUp(msg).catch(() => { });
+    // ── Slash commands ───────────────────────────────────────────────────────
+    if (interaction.isChatInputCommand()) {
+        if (!interaction.guild) {
+            await interaction.reply({ content: "❌ This command can only be used inside a server.", flags: 64 }).catch(() => {});
+            return;
         }
-        else {
-            await interaction.reply(msg).catch(() => { });
+        const command = commands.get(interaction.commandName);
+        if (!command) {
+            console.warn(`Unknown command: ${interaction.commandName}`);
+            return;
+        }
+        try {
+            await command.execute(interaction);
+        } catch (err) {
+            console.error(`Error executing /${interaction.commandName}:`, err);
+            const msg = { content: "❌ An error occurred while running this command.", flags: 64 };
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp(msg).catch(() => {});
+            } else {
+                await interaction.reply(msg).catch(() => {});
+            }
+        }
+        return;
+    }
+
+    // ── Button interactions ──────────────────────────────────────────────────
+    if (interaction.isButton()) {
+        const { customId, guild, user } = interaction;
+
+        if (customId === "ticket:open") {
+            return handleOpenTicket(interaction);
+        }
+
+        if (customId === "ticket:close") {
+            return handleCloseTicketButton(interaction);
         }
     }
+}
+
+async function handleOpenTicket(interaction) {
+    await interaction.deferReply({ flags: 64 });
+    const guild = interaction.guild;
+    const user = interaction.user;
+    const { color } = await getGuildStyle(guild.id);
+
+    const [settings] = await db.select().from(ticketSettingsTable).where(eq(ticketSettingsTable.guildId, guild.id));
+
+    if (!settings?.categoryId) {
+        return interaction.editReply({ content: "❌ The ticket system is not fully configured. Please ask an admin to run `/ticket setup`." });
+    }
+
+    // Check if user already has an open ticket
+    const [existing] = await db.select().from(ticketsTable)
+        .where(and(eq(ticketsTable.guildId, guild.id), eq(ticketsTable.userId, user.id), eq(ticketsTable.status, "open")));
+
+    if (existing) {
+        return interaction.editReply({ content: `❌ You already have an open ticket: <#${existing.channelId}>` });
+    }
+
+    // Increment ticket count
+    const newCount = (settings.ticketCount ?? 0) + 1;
+    await db.update(ticketSettingsTable)
+        .set({ ticketCount: newCount, updatedAt: new Date() })
+        .where(eq(ticketSettingsTable.guildId, guild.id));
+
+    const ticketNumber = newCount;
+    const channelName = `ticket-${String(ticketNumber).padStart(4, "0")}`;
+
+    // Build permission overwrites
+    const overwrites = [
+        { id: guild.roles.everyone, deny: [PermissionFlagsBits.ViewChannel] },
+        {
+            id: user.id,
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+        },
+        {
+            id: guild.members.me.id,
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ReadMessageHistory],
+        },
+    ];
+
+    if (settings.supportRoleId) {
+        overwrites.push({
+            id: settings.supportRoleId,
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+        });
+    }
+
+    // Create the ticket channel
+    const ticketChannel = await guild.channels.create({
+        name: channelName,
+        type: ChannelType.GuildText,
+        parent: settings.categoryId,
+        permissionOverwrites: overwrites,
+        topic: `Ticket #${String(ticketNumber).padStart(4, "0")} opened by ${user.tag}`,
+    });
+
+    // Save to DB
+    await db.insert(ticketsTable).values({
+        guildId: guild.id,
+        channelId: ticketChannel.id,
+        userId: user.id,
+        userTag: user.tag,
+        ticketNumber,
+        status: "open",
+    });
+
+    // Send the ticket embed
+    const embed = new EmbedBuilder()
+        .setColor(color)
+        .setTitle(`🎫 Ticket #${String(ticketNumber).padStart(4, "0")}`)
+        .setDescription(`Hello <@${user.id}>! A member of our support team will be with you shortly.\n\nPlease describe your issue in detail and we will get back to you as soon as possible.`)
+        .addFields({ name: "Opened By", value: `<@${user.id}> (${user.tag})`, inline: true })
+        .setTimestamp();
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId("ticket:close")
+            .setLabel("Close Ticket")
+            .setEmoji("🔒")
+            .setStyle(ButtonStyle.Danger),
+    );
+
+    await ticketChannel.send({ content: `<@${user.id}>${settings.supportRoleId ? ` | <@&${settings.supportRoleId}>` : ""}`, embeds: [embed], components: [row] });
+
+    return interaction.editReply({ content: `✅ Your ticket has been created: <#${ticketChannel.id}>` });
+}
+
+async function handleCloseTicketButton(interaction) {
+    await interaction.deferReply({ flags: 64 });
+    const guild = interaction.guild;
+    const channel = interaction.channel;
+    const { color } = await getGuildStyle(guild.id);
+
+    const [ticket] = await db.select().from(ticketsTable)
+        .where(and(eq(ticketsTable.channelId, channel.id), eq(ticketsTable.status, "open")));
+
+    if (!ticket) {
+        return interaction.editReply({ content: "❌ This channel is not an open ticket." });
+    }
+
+    const [settings] = await db.select().from(ticketSettingsTable).where(eq(ticketSettingsTable.guildId, guild.id));
+
+    // Generate transcript
+    const messages = await channel.messages.fetch({ limit: 100 });
+    const sorted = [...messages.values()].reverse();
+    const transcript = sorted.map((m) =>
+        `[${m.createdAt.toISOString()}] ${m.author.tag}: ${m.content || "[embed/attachment]"}`
+    ).join("\n");
+
+    const transcriptBuffer = Buffer.from(transcript, "utf-8");
+
+    if (settings?.transcriptChannelId) {
+        const transcriptCh = guild.channels.cache.get(settings.transcriptChannelId);
+        if (transcriptCh) {
+            const tEmbed = new EmbedBuilder()
+                .setColor(color)
+                .setTitle(`📋 Ticket #${String(ticket.ticketNumber).padStart(4, "0")} Transcript`)
+                .addFields(
+                    { name: "Opened By", value: `<@${ticket.userId}> (${ticket.userTag})`, inline: true },
+                    { name: "Closed By", value: `<@${interaction.user.id}> (${interaction.user.tag})`, inline: true },
+                    { name: "Opened At", value: `<t:${Math.floor(ticket.createdAt.getTime() / 1000)}:F>`, inline: true },
+                    { name: "Closed At", value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+                )
+                .setTimestamp();
+
+            await transcriptCh.send({
+                embeds: [tEmbed],
+                files: [{ attachment: transcriptBuffer, name: `ticket-${String(ticket.ticketNumber).padStart(4, "0")}.txt` }],
+            });
+        }
+    }
+
+    await db.update(ticketsTable)
+        .set({ status: "closed", closedBy: interaction.user.id, closedByTag: interaction.user.tag, closedAt: new Date() })
+        .where(eq(ticketsTable.id, ticket.id));
+
+    await interaction.editReply({ content: "🔒 Ticket closed. Transcript saved. Deleting channel in 5 seconds..." });
+    setTimeout(() => channel.delete(`Ticket closed by ${interaction.user.tag}`).catch(() => {}), 5000);
 }

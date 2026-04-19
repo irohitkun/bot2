@@ -1,0 +1,40 @@
+import { Events } from "discord.js";
+import { db } from "../db/index.js";
+import { reactionRolesTable } from "../db/schema.js";
+import { and, eq } from "drizzle-orm";
+
+export const name = Events.MessageReactionRemove;
+export const once = false;
+
+export async function execute(reaction, user) {
+    if (user.bot) return;
+
+    if (reaction.partial) {
+        try { await reaction.fetch(); } catch { return; }
+    }
+    if (reaction.message.partial) {
+        try { await reaction.message.fetch(); } catch { return; }
+    }
+
+    const guild = reaction.message.guild;
+    if (!guild) return;
+
+    const emoji = reaction.emoji.id
+        ? `<${reaction.emoji.animated ? "a" : ""}:${reaction.emoji.name}:${reaction.emoji.id}>`
+        : reaction.emoji.name;
+
+    const [row] = await db.select().from(reactionRolesTable)
+        .where(and(
+            eq(reactionRolesTable.messageId, reaction.message.id),
+            eq(reactionRolesTable.emoji, emoji),
+        ));
+
+    if (!row) return;
+
+    try {
+        const member = await guild.members.fetch(user.id);
+        await member.roles.remove(row.roleId, "Reaction role removed");
+    } catch (err) {
+        console.warn(`[ReactionRoles] Failed to remove role ${row.roleId} from ${user.id}:`, err.message);
+    }
+}
