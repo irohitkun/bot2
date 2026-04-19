@@ -1,4 +1,5 @@
 import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { animateInteraction } from "../utils/community.js";
 export const data = new SlashCommandBuilder()
     .setName("dice")
     .setDescription("Roll a dice")
@@ -13,5 +14,9 @@ export async function execute(interaction) {
         .setTitle("🎲 Dice Roll")
         .addFields({ name: "Rolls", value: rolls.map((r) => `**${r}**`).join(", "), inline: true }, { name: "Total", value: `**${total}**`, inline: true }, { name: "Dice", value: `${count}d${sides}`, inline: true })
         .setTimestamp();
-    await interaction.reply({ embeds: [embed] });
+    await animateInteraction(interaction, [
+        `🎲 Picking up ${count}d${sides}...`,
+        "🤞 Giving the dice a lucky shake...",
+        "🧮 Counting the final roll...",
+    ], { content: "", embeds: [embed] });
 }

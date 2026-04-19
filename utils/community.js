@@ -4,6 +4,7 @@ import { db, memberStatsTable } from "../db/index.js";
 
 const DAILY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const STREAK_WINDOW_MS = 48 * 60 * 60 * 1000;
+const CHAT_XP_COOLDOWN_MS = 60 * 1000;
 
 export function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -129,6 +130,49 @@ export async function claimDailyReward(guildId, user) {
         coinReward,
         xpReward,
         levelInfo,
+    };
+}
+
+export async function awardChatXp(guildId, user) {
+    const stats = await getOrCreateMemberStats(guildId, user);
+    const now = Date.now();
+    const lastAward = stats.lastChatXpAt?.getTime() ?? 0;
+
+    if (lastAward && now - lastAward < CHAT_XP_COOLDOWN_MS) {
+        return {
+            awarded: false,
+            stats,
+        };
+    }
+
+    const xpReward = Math.floor(Math.random() * 8) + 8;
+    const nextXp = stats.xp + xpReward;
+    const levelInfo = calculateLevel(nextXp);
+    const leveledUp = levelInfo.level > stats.level;
+
+    await db.update(memberStatsTable)
+        .set({
+            userTag: user.tag,
+            xp: nextXp,
+            level: levelInfo.level,
+            lastChatXpAt: new Date(now),
+            updatedAt: new Date(now),
+        })
+        .where(and(eq(memberStatsTable.guildId, guildId), eq(memberStatsTable.userId, user.id)));
+
+    return {
+        awarded: true,
+        xpReward,
+        leveledUp,
+        levelInfo,
+        stats: {
+            ...stats,
+            userTag: user.tag,
+            xp: nextXp,
+            level: levelInfo.level,
+            lastChatXpAt: new Date(now),
+            updatedAt: new Date(now),
+        },
     };
 }
 

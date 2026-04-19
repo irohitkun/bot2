@@ -25,6 +25,7 @@ Node.js Discord bot using JavaScript ES modules, discord.js v14, PostgreSQL, and
 - Upgraded `%help` to support categories using `%help <category>`.
 - Added `/setupcheck` and `%setupcheck` for checking database, intent, and permissions.
 - Added `/profile`, `/rank`, `/daily`, `%profile`, `%rank`, and `%daily`.
-- Added paced command responses for community commands so they reveal progress before the final embed.
-- Added `member_stats` database storage for XP, levels, coins, daily streaks, and daily claim timestamps.
+- Added automatic chat XP for normal member messages with a per-user cooldown.
+- Added paced responses for community and fun commands including `/coinflip`, `/dice`, `/8ball`, `%coinflip`, `%dice`, and `%8ball`.
+- Added `member_stats` database storage for XP, levels, coins, daily streaks, daily claim timestamps, and chat XP cooldown timestamps.
 - Fixed `reaction_roles` to use an ID primary key plus a unique message/emoji index.

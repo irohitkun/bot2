@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
 import { getGuildStyle } from "../utils/guildStyle.js";
+import { animateInteraction } from "../utils/community.js";
 const RESPONSES = [
     { text: "It is certain.", color: 0x57f287 },
     { text: "It is decidedly so.", color: 0x57f287 },
@@ -36,5 +37,9 @@ export async function execute(interaction) {
         .addFields({ name: "❓ Question", value: question }, { name: "🎱 Answer", value: `**${response.text}**` })
         .setFooter({ text: `Asked by ${interaction.user.tag}${style.footer ? ` • ${style.footer}` : ""}` })
         .setTimestamp();
-    await interaction.reply({ embeds: [embed] });
+    await animateInteraction(interaction, [
+        "🎱 The 8-ball sinks into the mist...",
+        "✨ A message starts forming inside...",
+        "🔮 Revealing your answer...",
+    ], { content: "", embeds: [embed] });
 }
