@@ -1,29 +1,54 @@
 import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from "discord.js";
 import { isPremiumGuild, premiumDeniedEmbed } from "../utils/permissions.js";
+import { getGuildStyle } from "../utils/guildStyle.js";
+import { applyFooter } from "../utils/modLog.js";
+
 export const data = new SlashCommandBuilder()
     .setName("embed")
-    .setDescription("Send a custom embed message")
+    .setDescription("Send a custom embed message (Premium)")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
-    .addStringOption((opt) => opt.setName("title").setDescription("Embed title").setRequired(true).setMaxLength(256))
-    .addStringOption((opt) => opt.setName("description").setDescription("Embed description").setRequired(true).setMaxLength(4096))
-    .addStringOption((opt) => opt.setName("color").setDescription("Hex color e.g. ff5733 (default: blurple)").setRequired(false))
-    .addChannelOption((opt) => opt.setName("channel").setDescription("Channel to send in (defaults to current)").setRequired(false));
+    .addStringOption((opt) =>
+        opt.setName("title").setDescription("Embed title").setRequired(true).setMaxLength(256)
+    )
+    .addStringOption((opt) =>
+        opt.setName("description").setDescription("Embed description").setRequired(true).setMaxLength(4096)
+    )
+    .addStringOption((opt) =>
+        opt.setName("color").setDescription("Hex color e.g. ff5733 (default: server color)").setRequired(false)
+    )
+    .addChannelOption((opt) =>
+        opt.setName("channel").setDescription("Channel to send in (defaults to current)").setRequired(false)
+    );
+
 export async function execute(interaction) {
     if (!(await isPremiumGuild(interaction.guild.id))) {
         return interaction.reply({ embeds: [premiumDeniedEmbed("Embed Builder")], flags: 64 });
     }
+
     const title = interaction.options.getString("title", true);
     const description = interaction.options.getString("description", true);
     const hexInput = interaction.options.getString("color");
-    const channel = (interaction.options.getChannel("channel") ?? interaction.channel);
-    let color = 0x5865f2;
+    const channel = interaction.options.getChannel("channel") ?? interaction.channel;
+
+    // Use server custom color as default, fall back to blurple
+    const style = await getGuildStyle(interaction.guild.id);
+    let color = style.color;
+
     if (hexInput) {
         const clean = hexInput.replace("#", "").trim();
-        if (!/^[0-9a-fA-F]{6}$/.test(clean))
-            return interaction.reply({ content: "❌ Invalid hex color.", flags: 64 });
+        if (!/^[0-9a-fA-F]{6}$/.test(clean)) {
+            return interaction.reply({ content: "❌ Invalid hex color. Use 6 hex characters e.g. `ff5733`.", flags: 64 });
+        }
         color = parseInt(clean, 16);
     }
-    const embed = new EmbedBuilder().setColor(color).setTitle(title).setDescription(description).setTimestamp();
+
+    const embed = new EmbedBuilder()
+        .setColor(color)
+        .setTitle(title)
+        .setDescription(description)
+        .setTimestamp();
+
+    applyFooter(embed, style);
     await channel.send({ embeds: [embed] });
     await interaction.reply({ content: `✅ Embed sent to ${channel}.`, flags: 64 });
 }

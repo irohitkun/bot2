@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, } from "discord.js";
 import { db, giveawaysTable } from "../db/index.js";
 import { eq, and } from "drizzle-orm";
-import { isPremiumGuild, premiumDeniedEmbed } from "../utils/permissions.js";
+import { isPremiumGuild, premiumDeniedEmbed, getPremiumTip } from "../utils/permissions.js";
 function parseDuration(input) {
     const match = input.match(/^(\d+)(s|m|h|d)$/i);
     if (!match)
@@ -60,7 +60,9 @@ export async function execute(interaction) {
             guildId, channelId: targetChannel.id, messageId: msg.id,
             prize, winnersCount, hostId: interaction.user.id, hostTag: interaction.user.tag, endsAt,
         });
-        await interaction.reply({ content: `✅ Giveaway started in ${targetChannel}!`, flags: 64 });
+        const premium = await isPremiumGuild(guildId);
+        const tipLine = premium ? "" : `\n-# ${getPremiumTip("giveaway")}`;
+        await interaction.reply({ content: `✅ Giveaway started in ${targetChannel}!${tipLine}`, flags: 64 });
         setTimeout(async () => {
             const [row] = await db.select().from(giveawaysTable).where(and(eq(giveawaysTable.messageId, msg.id), eq(giveawaysTable.ended, false)));
             if (!row)

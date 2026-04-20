@@ -7,6 +7,7 @@ import { ticketSettingsTable, ticketsTable } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { getGuildStyle } from "../utils/guildStyle.js";
 import { isPremiumGuild, premiumDeniedEmbed } from "../utils/permissions.js";
+import { fetchAllMessages } from "../utils/fetchAllMessages.js";
 
 export const data = new SlashCommandBuilder()
     .setName("ticket")
@@ -153,10 +154,7 @@ async function handlePanel(interaction) {
     // Free servers are limited to 1 panel; additional panels require Premium
     if (settings.panelMessageId && !(await isPremiumGuild(guild.id))) {
         return interaction.editReply({
-            embeds: [premiumDeniedEmbed("Multiple Ticket Panels").setDescription(
-                "Free servers can only have **1 ticket panel**.\n\n" +
-                "Upgrade to **Premium** to post unlimited panels in any channel. Use `/premium` to get started.",
-            )],
+            embeds: [premiumDeniedEmbed("Multiple Ticket Panels")],
         });
     }
 
@@ -205,9 +203,8 @@ async function handleClose(interaction) {
 
     const [settings] = await db.select().from(ticketSettingsTable).where(eq(ticketSettingsTable.guildId, guild.id));
 
-    // Generate transcript
-    const messages = await channel.messages.fetch({ limit: 100 });
-    const sorted = [...messages.values()].reverse();
+    // Generate full transcript (paginated — fetches all messages, not just last 100)
+    const sorted = await fetchAllMessages(channel);
     const transcript = sorted.map((m) =>
         `[${m.createdAt.toISOString()}] ${m.author.tag}: ${m.content || "[embed/attachment]"}`
     ).join("\n");

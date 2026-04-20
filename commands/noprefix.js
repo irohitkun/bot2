@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from "discord.js";
 import { setNoPrefixMode } from "../utils/prefixCache.js";
-import { isBotOwner, isPremiumGuild } from "../utils/permissions.js";
+import { isBotOwner, isPremiumGuild, premiumDeniedEmbed } from "../utils/permissions.js";
 import { addNoPrefixAccess, clearNoPrefixAccess, getNoPrefixAccessEntries, removeNoPrefixAccess } from "../utils/noPrefixAccess.js";
 export const data = new SlashCommandBuilder()
     .setName("noprefix")
@@ -29,7 +29,7 @@ export async function execute(interaction) {
     const premium = await isPremiumGuild(guildId);
     if (!premium) {
         return interaction.reply({
-            content: "❌ **No-Prefix Mode is a Premium feature.**\nContact us to activate premium for your server.",
+            embeds: [premiumDeniedEmbed("No-Prefix Mode")],
             flags: 64,
         });
     }

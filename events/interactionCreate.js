@@ -4,6 +4,7 @@ import { db } from "../db/index.js";
 import { ticketSettingsTable, ticketsTable } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { getGuildStyle } from "../utils/guildStyle.js";
+import { fetchAllMessages } from "../utils/fetchAllMessages.js";
 
 export const name = Events.InteractionCreate;
 export const once = false;
@@ -152,9 +153,8 @@ async function handleCloseTicketButton(interaction) {
 
     const [settings] = await db.select().from(ticketSettingsTable).where(eq(ticketSettingsTable.guildId, guild.id));
 
-    // Generate transcript
-    const messages = await channel.messages.fetch({ limit: 100 });
-    const sorted = [...messages.values()].reverse();
+    // Generate full transcript (paginated — fetches all messages, not just last 100)
+    const sorted = await fetchAllMessages(channel);
     const transcript = sorted.map((m) =>
         `[${m.createdAt.toISOString()}] ${m.author.tag}: ${m.content || "[embed/attachment]"}`
     ).join("\n");

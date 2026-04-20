@@ -5,7 +5,7 @@ import { db } from "../db/index.js";
 import { reactionRolesTable } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { getGuildStyle } from "../utils/guildStyle.js";
-import { isPremiumGuild, premiumDeniedEmbed } from "../utils/permissions.js";
+import { isPremiumGuild, premiumDeniedEmbed, getPremiumTip } from "../utils/permissions.js";
 
 const FREE_REACTION_ROLE_LIMIT = 5;
 
@@ -76,10 +76,7 @@ async function handleAdd(interaction) {
         const existing = await db.select().from(reactionRolesTable).where(eq(reactionRolesTable.guildId, guild.id));
         if (existing.length >= FREE_REACTION_ROLE_LIMIT) {
             return interaction.editReply({
-                embeds: [premiumDeniedEmbed(`Reaction Roles (free limit: ${FREE_REACTION_ROLE_LIMIT})`).setDescription(
-                    `You have reached the **${FREE_REACTION_ROLE_LIMIT} reaction role** limit for free servers.\n\n` +
-                    `Upgrade to **Premium** for unlimited reaction roles. Use \`/premium\` to get started.`,
-                )],
+                embeds: [premiumDeniedEmbed("Reaction Roles (unlimited)")],
             });
         }
     }
@@ -122,6 +119,11 @@ async function handleAdd(interaction) {
     });
 
     const { color } = await getGuildStyle(guild.id);
+
+    // Count total reaction roles after the insert (for the usage indicator)
+    const allRoles = await db.select().from(reactionRolesTable).where(eq(reactionRolesTable.guildId, guild.id));
+    const totalCount = allRoles.length;
+
     const embed = new EmbedBuilder()
         .setColor(color)
         .setTitle("✅ Reaction Role Added")
@@ -131,6 +133,16 @@ async function handleAdd(interaction) {
             { name: "Role", value: `<@&${role.id}>`, inline: true },
         )
         .setTimestamp();
+
+    // For non-premium guilds, show usage count and a tip when approaching the limit
+    if (!premium) {
+        const remaining = FREE_REACTION_ROLE_LIMIT - totalCount;
+        const usageText = remaining > 0
+            ? `${totalCount}/${FREE_REACTION_ROLE_LIMIT} reaction roles used — ${remaining} slot${remaining === 1 ? "" : "s"} left`
+            : `${totalCount}/${FREE_REACTION_ROLE_LIMIT} — limit reached`;
+        const tip = remaining <= 2 ? getPremiumTip("reaction") : "";
+        embed.setFooter({ text: tip ? `${usageText} • ${tip}` : usageText });
+    }
 
     return interaction.editReply({ embeds: [embed] });
 }

@@ -6,12 +6,9 @@ const premiumCache = new Map();
 const FALLBACK_BOT_OWNERS = ["1298631508533313536"];
 
 // ── Tier definitions ─────────────────────────────────────────────────────────
-// Collapsed to 2 tiers: free (0) and premium (1)
-// Legacy DB values basic / pro / enterprise are all treated as premium
 export const TIERS = {
     free: 0,
     premium: 1,
-    // legacy aliases kept for backward compat
     basic: 1,
     pro: 1,
     enterprise: 1,
@@ -40,7 +37,7 @@ export const TIER_FEATURES = {
         "Custom bot prefix (setprefix)",
         "Server customization (embed color, footer text)",
         "AutoMod (word filter, spam protection, mention limits)",
-        "Moderation log channel",
+        "Moderation log channel (logs every ban, kick, mute, warn)",
         "No-prefix mode",
         "No-prefix access management",
         "Custom embed builder",
@@ -48,6 +45,55 @@ export const TIER_FEATURES = {
         "Unlimited reaction roles",
         "Multiple ticket panels",
     ],
+};
+
+// ── Feature-specific denial descriptions ─────────────────────────────────────
+const FEATURE_DETAILS = {
+    "AutoMod": {
+        icon: "🛡️",
+        pitch: "AutoMod watches your server 24/7 — automatically deleting banned words, killing spam, capping mentions and caps abuse, and logging every violation to a private channel.",
+        perks: ["Word filter with custom banned words", "Anti-spam (5 messages in 5s)", "Max mention & caps limits", "Dedicated log channel for every violation"],
+    },
+    "Moderation Logs": {
+        icon: "📋",
+        pitch: "Every ban, kick, mute, unmute, and warning is silently forwarded to a private log channel — giving your mod team a full audit trail without clogging your main channels.",
+        perks: ["Auto-logs ban, kick, mute, unmute, warn", "Rich embeds with moderator, reason & timestamp", "Set any channel as the log destination", "Never lose track of who did what"],
+    },
+    "Server Customization": {
+        icon: "🎨",
+        pitch: "Make the bot feel like it belongs to your community. Set your brand's color on every embed, add a custom footer, and even rename the bot just for your server.",
+        perks: ["Custom embed color (any hex code)", "Custom footer text on all bot messages", "Bot nickname per server", "Resets cleanly any time"],
+    },
+    "Custom Prefix": {
+        icon: "⌨️",
+        pitch: "Tired of the default prefix clashing with another bot? Pick any character(s) as your server's exclusive bot prefix.",
+        perks: ["1–5 character prefix of your choice", "Works instantly across all prefix commands", "Persists through bot restarts", "Example: !, ?, $, >>, ..."],
+    },
+    "Embed Builder": {
+        icon: "✍️",
+        pitch: "Send beautiful, fully custom embeds directly from a slash command — announcements, rules, pinned info, you name it. Uses your server's custom color by default.",
+        perks: ["Custom title & description", "Hex color override per embed", "Send to any channel", "Uses your server's brand color by default"],
+    },
+    "No-Prefix Mode": {
+        icon: "⚡",
+        pitch: "Let trusted users run commands without any prefix at all — just type the command name directly. Fine-grained access control by user or role.",
+        perks: ["Toggle on/off per server", "Allow specific users or roles", "Server owner always has access", "Works alongside normal prefix commands"],
+    },
+    "Giveaway Reroll": {
+        icon: "🎲",
+        pitch: "When a winner doesn't respond or can't claim their prize, just reroll — instantly pick a new winner from the original entry list.",
+        perks: ["Reroll after any completed giveaway", "Picks from original 🎉 reaction list", "Announces new winner in the channel", "No limit on rerolls per giveaway"],
+    },
+    "Reaction Roles (unlimited)": {
+        icon: "🎭",
+        pitch: "Free servers can set up 5 reaction roles. Premium removes that cap entirely — build full role menus with as many emojis and roles as you need.",
+        perks: ["Unlimited reaction roles per server", "Works on any message in any channel", "Stacks with free reaction roles already set up", "Manage with the same /reactionroles commands"],
+    },
+    "Multiple Ticket Panels": {
+        icon: "🎫",
+        pitch: "Free servers get one ticket panel. Premium lets you create separate panels for Support, Reports, Appeals, Partnerships — each routing to its own category.",
+        perks: ["Unlimited ticket panels", "Each panel has its own name and category", "Custom button labels", "Full transcript system on close"],
+    },
 };
 
 export function isBotOwner(userId) {
@@ -76,7 +122,6 @@ export async function isPremiumGuild(guildId) {
 export async function getGuildTier(guildId) {
     const cached = premiumCache.get(guildId);
     if (cached?.tier && (!cached.expiresAt || cached.expiresAt > Date.now())) {
-        // Normalise legacy tier names to "premium"
         return cached.tier === "free" ? "free" : "premium";
     }
     const [row] = await db.select().from(premiumGuildsTable).where(eq(premiumGuildsTable.guildId, guildId));
@@ -92,7 +137,6 @@ export async function getGuildTierLevel(guildId) {
     return TIERS[tier] ?? 0;
 }
 
-// Returns true if the guild has premium (or higher)
 export async function hasTier(guildId, requiredTier) {
     const level = await getGuildTierLevel(guildId);
     const required = TIERS[requiredTier] ?? 0;
@@ -103,16 +147,81 @@ export function invalidatePremiumCache(guildId) {
     premiumCache.delete(guildId);
 }
 
-// ── Shared premium denial embed ───────────────────────────────────────────────
+// ── Premium denial embed ──────────────────────────────────────────────────────
+/**
+ * Returns a rich, feature-specific embed shown when a non-premium guild tries
+ * to use a premium feature.  Makes the upsell feel aspirational rather than
+ * like a hard wall.
+ *
+ * @param {string} featureName — must match a key in FEATURE_DETAILS or a generic embed is returned
+ */
 export function premiumDeniedEmbed(featureName) {
-    return new EmbedBuilder()
-        .setColor(0xfee75c)
-        .setTitle("⭐ Premium Required")
-        .setDescription(
+    const detail = FEATURE_DETAILS[featureName];
+
+    const embed = new EmbedBuilder()
+        .setColor(0xf1c40f)
+        .setTitle(`${detail?.icon ?? "⭐"} ${featureName} — Premium Feature`)
+        .setFooter({ text: "Use /premium info to see everything Premium unlocks • /premium status to check your server" });
+
+    if (detail) {
+        embed
+            .setDescription(
+                `${detail.pitch}\n\n` +
+                `**What you get:**\n` +
+                detail.perks.map((p) => `✦ ${p}`).join("\n")
+            )
+            .addFields({
+                name: "🚀 How to get Premium",
+                value: "Contact the bot owner to activate Premium for your server.\nUse `/premium info` to see the full feature list.",
+                inline: false,
+            });
+    } else {
+        embed.setDescription(
             `**${featureName}** is a Premium feature.\n\n` +
-            `Upgrade your server to unlock AutoMod, server logs, custom prefix, embed builder, ` +
+            `Premium unlocks AutoMod, server logs, custom prefix, embed builder, ` +
             `unlimited reaction roles, giveaway reroll, multiple ticket panels, no-prefix mode, and more.\n\n` +
-            `Use \`/premium\` to view plans and activate Premium.`,
-        )
-        .setFooter({ text: "One plan. All features." });
+            `Use \`/premium info\` to learn more and \`/premium status\` to check your server.`
+        );
+    }
+
+    return embed;
+}
+
+// ── Soft upsell tips for free commands ───────────────────────────────────────
+/**
+ * Returns a short "💡 Premium tip" string to attach as a footer on free
+ * command responses — motivates without blocking.
+ *
+ * Pass a `context` key to get a relevant tip for the command being used.
+ * If no context matches, returns a randomly chosen generic tip.
+ *
+ * @param {"moderation"|"giveaway"|"reaction"|"ticket"|"general"} [context]
+ * @returns {string}
+ */
+export function getPremiumTip(context) {
+    const tips = {
+        moderation: [
+            "💡 Premium automatically logs every ban, kick, mute & warn to a private channel — /premium info",
+            "💡 Premium servers can set a custom embed color & footer text — /premium info",
+            "💡 AutoMod (Premium) can auto-delete bad words, spam & mention floods — /premium info",
+        ],
+        giveaway: [
+            "💡 Winner unavailable? Premium unlocks Giveaway Reroll — /premium info",
+            "💡 Upgrade to Premium to reroll any completed giveaway instantly — /premium info",
+        ],
+        reaction: [
+            "💡 Premium removes the 5 reaction role limit — add as many as you need — /premium info",
+        ],
+        ticket: [
+            "💡 Premium allows multiple ticket panels for Support, Reports, Appeals & more — /premium info",
+        ],
+        general: [
+            "💡 Premium unlocks AutoMod, custom prefix, mod logs & more — /premium info",
+            "💡 Customize the bot's colors and footer text with Premium — /premium info",
+            "💡 Use /premium info to see everything Premium unlocks for your server",
+        ],
+    };
+
+    const pool = tips[context] ?? tips.general;
+    return pool[Math.floor(Math.random() * pool.length)];
 }

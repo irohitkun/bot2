@@ -54,6 +54,7 @@ export const helpCategories = [
         commands: [
             ["/profile", "View your community profile"],
             ["/rank", "View your server rank"],
+            ["/leaderboard", "View the server XP leaderboard"],
             ["/daily", "Claim daily coins and XP"],
             ["/afk", "Set AFK status"],
             ["/remind", "Create reminders"],
@@ -95,6 +96,7 @@ export const prefixCommandNames = new Set([
     "help",
     "invite",
     "kick",
+    "leaderboard",
     "lock",
     "math",
     "mute",

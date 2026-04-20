@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from "discord.js";
 import { db, serverCustomizationTable } from "../db/index.js";
-import { isPremiumGuild } from "../utils/permissions.js";
+import { isPremiumGuild, premiumDeniedEmbed } from "../utils/permissions.js";
 import { getGuildStyle, invalidateStyleCache, hexToInt } from "../utils/guildStyle.js";
 export const data = new SlashCommandBuilder()
     .setName("customize")
@@ -18,7 +18,7 @@ export async function execute(interaction) {
     const guildId = interaction.guild.id;
     const premium = await isPremiumGuild(guildId);
     if (!premium) {
-        return interaction.reply({ content: "❌ **Customize is a Premium feature.**\nContact us to activate premium for your server.", flags: 64 });
+        return interaction.reply({ embeds: [premiumDeniedEmbed("Server Customization")], flags: 64 });
     }
     const sub = interaction.options.getSubcommand();
     if (sub === "color") {
