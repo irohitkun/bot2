@@ -5,6 +5,14 @@ import { isBotOwner } from "../utils/permissions.js";
 const TIER_ICONS  = { free: "🔓", basic: "⭐", pro: "💎", enterprise: "👑" };
 const TIER_COLORS = { basic: 0xf1c40f, pro: 0x3498db, enterprise: 0x9b59b6 };
 
+async function getGuildDisplayName(client, guildId) {
+    const cached = client.guilds.cache.get(guildId);
+    if (cached)
+        return cached.name;
+    const fetched = await client.guilds.fetch(guildId).catch(() => null);
+    return fetched?.name ?? "Unknown server";
+}
+
 export const data = new SlashCommandBuilder()
     .setName("premiumadmin")
     .setDescription("View all active premium subscriptions and their details")
@@ -35,7 +43,7 @@ export async function execute(interaction) {
         .setTimestamp();
 
     if (active.length > 0) {
-        const lines = active.map((r) => {
+        const lines = await Promise.all(active.map(async (r) => {
             const icon = TIER_ICONS[r.tier] ?? "⭐";
             const trial = r.isTrial ? " 🆕" : "";
             const expiry = r.expiresAt
@@ -43,12 +51,14 @@ export async function execute(interaction) {
                 : "Never expires";
             const activated = `<t:${Math.floor(r.activatedAt.getTime() / 1000)}:D>`;
             const notify = r.notifyUserId ? ` • Notify: <@${r.notifyUserId}>` : "";
+            const guildName = await getGuildDisplayName(interaction.client, r.guildId);
             return [
-                `**Guild:** \`${r.guildId}\``,
+                `**Guild:** ${guildName} (\`${r.guildId}\`)`,
                 `${icon} **${r.tier}**${trial} • Activated: ${activated} • ${expiry}${notify}`,
-                `Activated by: ${r.activatedByTag}${r.notes ? ` • Note: ${r.notes}` : ""}`,
+                `Activated by: ${r.activatedByTag}`,
+                `Notes: ${r.notes || "None"}`,
             ].join("\n");
-        });
+        }));
 
         // Discord embeds cap at 4096 chars — split into chunks if needed
         const chunks = [];
@@ -85,11 +95,13 @@ export async function execute(interaction) {
 
     // Show expired entries too if any
     if (expired.length > 0) {
-        const expiredLines = expired.map((r) => {
+        const expiredLines = (await Promise.all(expired.map(async (r) => {
             const icon = TIER_ICONS[r.tier] ?? "⭐";
             const trial = r.isTrial ? " 🆕" : "";
-            return `\`${r.guildId}\` — ${icon} **${r.tier}**${trial} — Expired <t:${Math.floor(r.expiresAt.getTime() / 1000)}:R> — by ${r.activatedByTag}`;
-        }).join("\n");
+            const guildName = await getGuildDisplayName(interaction.client, r.guildId);
+            const note = r.notes ? ` — Notes: ${r.notes}` : "";
+            return `**${guildName}** (\`${r.guildId}\`) — ${icon} **${r.tier}**${trial} — Expired <t:${Math.floor(r.expiresAt.getTime() / 1000)}:R> — by ${r.activatedByTag}${note}`;
+        }))).join("\n");
 
         await interaction.followUp({
             embeds: [

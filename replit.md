@@ -30,5 +30,6 @@ Node.js Discord bot using JavaScript ES modules, discord.js v14, PostgreSQL, and
 - No-prefix mode now excludes premium management and suspense/fun commands like coinflip, dice, and 8ball.
 - Quick utility/community commands respond immediately; suspense commands such as coinflip, dice, and 8ball keep paced responses.
 - Premium tiers now display as a compact feature comparison.
+- Owner premium listings now include server names when available and saved notes for each premium guild.
 - Added `member_stats` database storage for XP, levels, coins, daily streaks, daily claim timestamps, and chat XP cooldown timestamps.
 - Fixed `reaction_roles` to use an ID primary key plus a unique message/emoji index.

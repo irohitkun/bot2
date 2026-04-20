@@ -6,6 +6,14 @@ import { isBotOwner, invalidatePremiumCache, TIER_FEATURES } from "../utils/perm
 const TIER_ICONS  = { free: "🔓", basic: "⭐", pro: "💎", enterprise: "👑" };
 const TIER_COLORS = { free: 0x95a5a6, basic: 0xf1c40f, pro: 0x3498db, enterprise: 0x9b59b6 };
 
+async function getGuildDisplayName(client, guildId) {
+    const cached = client.guilds.cache.get(guildId);
+    if (cached)
+        return cached.name;
+    const fetched = await client.guilds.fetch(guildId).catch(() => null);
+    return fetched?.name ?? "Unknown server";
+}
+
 function parsePremiumDuration(input) {
     if (!input) return null;
     const value = input.trim().toLowerCase();
@@ -189,16 +197,20 @@ async function handleList(interaction) {
     const rows = await db.select().from(premiumGuildsTable);
     if (rows.length === 0) return interaction.reply({ content: "No premium guilds found.", flags: 64 });
 
+    const lines = await Promise.all(rows.map(async (r) => {
+        const expired = r.expiresAt && r.expiresAt.getTime() <= Date.now();
+        const expiry = r.expiresAt ? `<t:${Math.floor(r.expiresAt.getTime() / 1000)}:R>` : "Never";
+        const icon = TIER_ICONS[r.tier] ?? "⭐";
+        const trial = r.isTrial ? " 🆕 Trial" : "";
+        const guildName = await getGuildDisplayName(interaction.client, r.guildId);
+        const note = r.notes ? `\nNotes: ${r.notes}` : "";
+        return `**${guildName}** (\`${r.guildId}\`) — ${icon} **${r.tier}**${trial} — ${expired ? "❌ Expired" : "✅ Active"} — Expires: ${expiry}${note}`;
+    }));
+
     const embed = new EmbedBuilder()
         .setColor(0xf1c40f)
         .setTitle(`⭐ Premium Guilds (${rows.length})`)
-        .setDescription(rows.map((r) => {
-            const expired = r.expiresAt && r.expiresAt.getTime() <= Date.now();
-            const expiry = r.expiresAt ? `<t:${Math.floor(r.expiresAt.getTime() / 1000)}:R>` : "Never";
-            const icon = TIER_ICONS[r.tier] ?? "⭐";
-            const trial = r.isTrial ? " 🆕 Trial" : "";
-            return `\`${r.guildId}\` — ${icon} **${r.tier}**${trial} — ${expired ? "❌ Expired" : "✅ Active"} — Expires: ${expiry}`;
-        }).join("\n"))
+        .setDescription(lines.join("\n\n").slice(0, 4000))
         .setTimestamp();
 
     return interaction.reply({ embeds: [embed], flags: 64 });
