@@ -75,13 +75,19 @@ export async function execute(interaction) {
 }
 
 async function handleTiers(interaction) {
-    const embeds = Object.entries(TIER_FEATURES).map(([tier, features]) =>
-        new EmbedBuilder()
-            .setColor(TIER_COLORS[tier])
-            .setTitle(`${TIER_ICONS[tier]} ${tier.charAt(0).toUpperCase() + tier.slice(1)} Tier`)
-            .setDescription(features.map((f) => `• ${f}`).join("\n"))
-    );
-    return interaction.reply({ embeds });
+    const embed = new EmbedBuilder()
+        .setColor(0xf1c40f)
+        .setTitle("Premium Tier Features")
+        .setDescription("Compact view of what each tier includes.");
+
+    for (const [tier, features] of Object.entries(TIER_FEATURES)) {
+        embed.addFields({
+            name: `${TIER_ICONS[tier]} ${tier.charAt(0).toUpperCase() + tier.slice(1)}`,
+            value: features.map((feature) => `• ${feature}`).join("\n"),
+        });
+    }
+
+    return interaction.reply({ embeds: [embed], flags: 64 });
 }
 
 async function handleActivate(interaction) {

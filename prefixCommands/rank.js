@@ -1,5 +1,5 @@
 import { getGuildStyle } from "../utils/guildStyle.js";
-import { animateMessage, createRankEmbed, getLeaderboard, getMemberRank, getOrCreateMemberStats } from "../utils/community.js";
+import { createRankEmbed, getLeaderboard, getMemberRank, getOrCreateMemberStats } from "../utils/community.js";
 
 export const command = {
     name: "rank",
@@ -13,10 +13,6 @@ export const command = {
         const leaderboard = await getLeaderboard(message.guild.id);
         const embed = createRankEmbed({ user: target, stats, rank, leaderboard, color });
 
-        await animateMessage(message, [
-            "Scanning the server leaderboard...",
-            "Comparing XP totals...",
-            "Locking in the current rank...",
-        ], { content: null, embeds: [embed] });
+        await message.reply({ embeds: [embed] });
     },
 };

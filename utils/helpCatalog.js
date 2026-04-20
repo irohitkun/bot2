@@ -79,6 +79,55 @@ export const helpCategories = [
     },
 ];
 
+export const prefixCommandNames = new Set([
+    "8ball",
+    "afk",
+    "avatar",
+    "ban",
+    "banner",
+    "channel",
+    "clearwarn",
+    "coinflip",
+    "daily",
+    "dice",
+    "giveaway",
+    "help",
+    "invite",
+    "kick",
+    "lock",
+    "math",
+    "mute",
+    "ping",
+    "poll",
+    "profile",
+    "purge",
+    "rank",
+    "remind",
+    "role",
+    "serverinfo",
+    "setprefix",
+    "setupcheck",
+    "slowmode",
+    "snipe",
+    "translate",
+    "unban",
+    "unlock",
+    "unmute",
+    "userinfo",
+    "warn",
+    "warnings",
+]);
+
+export const noPrefixBlockedCommandNames = new Set([
+    "8ball",
+    "coinflip",
+    "dice",
+    "premium",
+    "premiumadmin",
+    "freetrial",
+    "noprefix",
+]);
+
 export function getHelpCategory(key) {
     return helpCategories.find((category) => category.key === key);
 }
@@ -88,4 +137,13 @@ export function formatCommands(commands, prefix = "/") {
         const commandName = prefix === "/" ? name : `${prefix}${name.slice(1)}`;
         return `\`${commandName}\` — ${description}`;
     }).join("\n");
+}
+
+export function getPrefixHelpCategories() {
+    return helpCategories
+        .map((category) => ({
+            ...category,
+            commands: category.commands.filter(([name]) => prefixCommandNames.has(name.slice(1))),
+        }))
+        .filter((category) => category.commands.length > 0);
 }

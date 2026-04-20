@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
 import { getGuildStyle } from "../utils/guildStyle.js";
-import { animateInteraction, claimDailyReward, createDailyEmbed } from "../utils/community.js";
+import { claimDailyReward, createDailyEmbed } from "../utils/community.js";
 
 export const data = new SlashCommandBuilder()
     .setName("daily")
@@ -11,9 +11,5 @@ export async function execute(interaction) {
     const result = await claimDailyReward(interaction.guild.id, interaction.user);
     const embed = createDailyEmbed({ user: interaction.user, result, color });
 
-    await animateInteraction(interaction, [
-        "Checking today's reward chest...",
-        "Rolling the daily bonus...",
-        "Adding rewards to your profile...",
-    ], { content: null, embeds: [embed] });
+    await interaction.reply({ embeds: [embed] });
 }

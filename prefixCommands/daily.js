@@ -1,5 +1,5 @@
 import { getGuildStyle } from "../utils/guildStyle.js";
-import { animateMessage, claimDailyReward, createDailyEmbed } from "../utils/community.js";
+import { claimDailyReward, createDailyEmbed } from "../utils/community.js";
 
 export const command = {
     name: "daily",
@@ -10,10 +10,6 @@ export const command = {
         const result = await claimDailyReward(message.guild.id, message.author);
         const embed = createDailyEmbed({ user: message.author, result, color });
 
-        await animateMessage(message, [
-            "Checking today's reward chest...",
-            "Rolling the daily bonus...",
-            "Adding rewards to your profile...",
-        ], { content: null, embeds: [embed] });
+        await message.reply({ embeds: [embed] });
     },
 };

@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
 import { getGuildStyle } from "../utils/guildStyle.js";
-import { animateInteraction, createProfileEmbed, getMemberRank, getOrCreateMemberStats } from "../utils/community.js";
+import { createProfileEmbed, getMemberRank, getOrCreateMemberStats } from "../utils/community.js";
 
 export const data = new SlashCommandBuilder()
     .setName("profile")
@@ -16,9 +16,5 @@ export async function execute(interaction) {
     const rank = await getMemberRank(interaction.guild.id, target.id, stats.xp);
     const embed = createProfileEmbed({ user: target, stats, rank, color });
 
-    await animateInteraction(interaction, [
-        "Opening the community profile...",
-        "Counting coins and XP...",
-        "Polishing the profile card...",
-    ], { content: null, embeds: [embed] });
+    await interaction.reply({ embeds: [embed] });
 }

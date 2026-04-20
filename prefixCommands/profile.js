@@ -1,5 +1,5 @@
 import { getGuildStyle } from "../utils/guildStyle.js";
-import { animateMessage, createProfileEmbed, getMemberRank, getOrCreateMemberStats } from "../utils/community.js";
+import { createProfileEmbed, getMemberRank, getOrCreateMemberStats } from "../utils/community.js";
 
 export const command = {
     name: "profile",
@@ -12,10 +12,6 @@ export const command = {
         const rank = await getMemberRank(message.guild.id, target.id, stats.xp);
         const embed = createProfileEmbed({ user: target, stats, rank, color });
 
-        await animateMessage(message, [
-            "Opening the community profile...",
-            "Counting coins and XP...",
-            "Polishing the profile card...",
-        ], { content: null, embeds: [embed] });
+        await message.reply({ embeds: [embed] });
     },
 };

@@ -22,10 +22,13 @@ Node.js Discord bot using JavaScript ES modules, discord.js v14, PostgreSQL, and
 ## Recent Upgrades
 
 - Added `/help` with browsable command categories.
-- Upgraded `%help` to support categories using `%help <category>`.
+- Upgraded `%help` to show only commands that truly support prefix usage.
 - Added `/setupcheck` and `%setupcheck` for checking database, intent, and permissions.
 - Added `/profile`, `/rank`, `/daily`, `%profile`, `%rank`, and `%daily`.
 - Added automatic chat XP for normal member messages with a per-user cooldown.
-- Added paced responses for community and fun commands including `/coinflip`, `/dice`, `/8ball`, `%coinflip`, `%dice`, and `%8ball`.
+- Added `%remind <time> <message>` prefix support.
+- No-prefix mode now excludes premium management and suspense/fun commands like coinflip, dice, and 8ball.
+- Quick utility/community commands respond immediately; suspense commands such as coinflip, dice, and 8ball keep paced responses.
+- Premium tiers now display as a compact feature comparison.
 - Added `member_stats` database storage for XP, levels, coins, daily streaks, daily claim timestamps, and chat XP cooldown timestamps.
 - Fixed `reaction_roles` to use an ID primary key plus a unique message/emoji index.

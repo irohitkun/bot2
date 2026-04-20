@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
 import { getGuildStyle } from "../utils/guildStyle.js";
-import { animateInteraction, createRankEmbed, getLeaderboard, getMemberRank, getOrCreateMemberStats } from "../utils/community.js";
+import { createRankEmbed, getLeaderboard, getMemberRank, getOrCreateMemberStats } from "../utils/community.js";
 
 export const data = new SlashCommandBuilder()
     .setName("rank")
@@ -17,9 +17,5 @@ export async function execute(interaction) {
     const leaderboard = await getLeaderboard(interaction.guild.id);
     const embed = createRankEmbed({ user: target, stats, rank, leaderboard, color });
 
-    await animateInteraction(interaction, [
-        "Scanning the server leaderboard...",
-        "Comparing XP totals...",
-        "Locking in the current rank...",
-    ], { content: null, embeds: [embed] });
+    await interaction.reply({ embeds: [embed] });
 }
