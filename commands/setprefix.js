@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, } from "discord.js";
 import { setPrefix } from "../utils/prefixCache.js";
+import { isPremiumGuild, premiumDeniedEmbed } from "../utils/permissions.js";
 export const data = new SlashCommandBuilder()
     .setName("setprefix")
     .setDescription("Change the bot prefix for this server")
@@ -11,6 +12,9 @@ export const data = new SlashCommandBuilder()
     .setMaxLength(5)
     .setRequired(true));
 export async function execute(interaction) {
+    if (!(await isPremiumGuild(interaction.guild.id))) {
+        return interaction.reply({ embeds: [premiumDeniedEmbed("Custom Prefix")], flags: 64 });
+    }
     const newPrefix = interaction.options.getString("prefix", true);
     const guild = interaction.guild;
     await setPrefix(guild.id, newPrefix);

@@ -5,6 +5,9 @@ import { db } from "../db/index.js";
 import { reactionRolesTable } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { getGuildStyle } from "../utils/guildStyle.js";
+import { isPremiumGuild, premiumDeniedEmbed } from "../utils/permissions.js";
+
+const FREE_REACTION_ROLE_LIMIT = 5;
 
 export const data = new SlashCommandBuilder()
     .setName("reactionroles")
@@ -66,6 +69,20 @@ async function handleAdd(interaction) {
     const emoji = interaction.options.getString("emoji", true).trim();
     const role = interaction.options.getRole("role", true);
     const channel = interaction.options.getChannel("channel") ?? interaction.channel;
+
+    // Enforce free tier limit
+    const premium = await isPremiumGuild(guild.id);
+    if (!premium) {
+        const existing = await db.select().from(reactionRolesTable).where(eq(reactionRolesTable.guildId, guild.id));
+        if (existing.length >= FREE_REACTION_ROLE_LIMIT) {
+            return interaction.editReply({
+                embeds: [premiumDeniedEmbed(`Reaction Roles (free limit: ${FREE_REACTION_ROLE_LIMIT})`).setDescription(
+                    `You have reached the **${FREE_REACTION_ROLE_LIMIT} reaction role** limit for free servers.\n\n` +
+                    `Upgrade to **Premium** for unlimited reaction roles. Use \`/premium\` to get started.`,
+                )],
+            });
+        }
+    }
 
     // Validate bot can assign this role
     const botMember = await guild.members.fetchMe();

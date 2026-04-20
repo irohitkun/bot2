@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, } from "discord.js";
 import { db, giveawaysTable } from "../db/index.js";
 import { eq, and } from "drizzle-orm";
+import { isPremiumGuild, premiumDeniedEmbed } from "../utils/permissions.js";
 function parseDuration(input) {
     const match = input.match(/^(\d+)(s|m|h|d)$/i);
     if (!match)
@@ -97,6 +98,9 @@ export async function execute(interaction) {
         return interaction.reply({ content: winners.length > 0 ? `✅ Giveaway ended! Winners: ${winners.map((id) => `<@${id}>`).join(", ")}` : "✅ Giveaway ended! No valid entries.", flags: 64 });
     }
     if (sub === "reroll") {
+        if (!(await isPremiumGuild(guildId))) {
+            return interaction.reply({ embeds: [premiumDeniedEmbed("Giveaway Reroll")], flags: 64 });
+        }
         const messageId = interaction.options.getString("message_id", true).trim();
         const [row] = await db.select().from(giveawaysTable).where(and(eq(giveawaysTable.messageId, messageId), eq(giveawaysTable.ended, true)));
         if (!row)

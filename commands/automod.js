@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from "discord.js";
 import { db, automodSettingsTable } from "../db/index.js";
 import { eq } from "drizzle-orm";
+import { isPremiumGuild, premiumDeniedEmbed } from "../utils/permissions.js";
 export const data = new SlashCommandBuilder()
     .setName("automod")
     .setDescription("Configure automatic moderation")
@@ -23,6 +24,9 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
     const sub = interaction.options.getSubcommand();
     const guildId = interaction.guild.id;
+    if (!(await isPremiumGuild(guildId))) {
+        return interaction.reply({ embeds: [premiumDeniedEmbed("AutoMod")], flags: 64 });
+    }
     const [settings] = await db.select().from(automodSettingsTable).where(eq(automodSettingsTable.guildId, guildId));
     if (sub === "status") {
         const words = settings?.badWords ? settings.badWords.split(",").filter(Boolean) : [];

@@ -6,6 +6,7 @@ import { db } from "../db/index.js";
 import { ticketSettingsTable, ticketsTable } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { getGuildStyle } from "../utils/guildStyle.js";
+import { isPremiumGuild, premiumDeniedEmbed } from "../utils/permissions.js";
 
 export const data = new SlashCommandBuilder()
     .setName("ticket")
@@ -147,6 +148,16 @@ async function handlePanel(interaction) {
     const [settings] = await db.select().from(ticketSettingsTable).where(eq(ticketSettingsTable.guildId, guild.id));
     if (!settings?.categoryId) {
         return interaction.editReply({ content: "❌ Please run `/ticket setup` first to configure the ticket system." });
+    }
+
+    // Free servers are limited to 1 panel; additional panels require Premium
+    if (settings.panelMessageId && !(await isPremiumGuild(guild.id))) {
+        return interaction.editReply({
+            embeds: [premiumDeniedEmbed("Multiple Ticket Panels").setDescription(
+                "Free servers can only have **1 ticket panel**.\n\n" +
+                "Upgrade to **Premium** to post unlimited panels in any channel. Use `/premium` to get started.",
+            )],
+        });
     }
 
     const channel = interaction.options.getChannel("channel", true);

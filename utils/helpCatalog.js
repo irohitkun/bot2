@@ -72,6 +72,7 @@ export const helpCategories = [
         key: "premium",
         label: "Premium",
         commands: [
+            ["/perks", "View this server's plan and enabled features"],
             ["/premium", "Manage premium access"],
             ["/premiumadmin", "View premium administration tools"],
             ["/freetrial", "Grant a free trial"],

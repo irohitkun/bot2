@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { isBotOwner, invalidatePremiumCache, TIER_FEATURES } from "../utils/permissions.js";
 
 const TRIAL_DAYS = 7;
-const TRIAL_TIER = "basic";
+const TRIAL_TIER = "premium";
 
 export const data = new SlashCommandBuilder()
     .setName("freetrial")

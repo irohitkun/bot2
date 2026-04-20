@@ -1,4 +1,5 @@
 import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from "discord.js";
+import { isPremiumGuild, premiumDeniedEmbed } from "../utils/permissions.js";
 export const data = new SlashCommandBuilder()
     .setName("embed")
     .setDescription("Send a custom embed message")
@@ -8,6 +9,9 @@ export const data = new SlashCommandBuilder()
     .addStringOption((opt) => opt.setName("color").setDescription("Hex color e.g. ff5733 (default: blurple)").setRequired(false))
     .addChannelOption((opt) => opt.setName("channel").setDescription("Channel to send in (defaults to current)").setRequired(false));
 export async function execute(interaction) {
+    if (!(await isPremiumGuild(interaction.guild.id))) {
+        return interaction.reply({ embeds: [premiumDeniedEmbed("Embed Builder")], flags: 64 });
+    }
     const title = interaction.options.getString("title", true);
     const description = interaction.options.getString("description", true);
     const hexInput = interaction.options.getString("color");
