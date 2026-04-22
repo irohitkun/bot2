@@ -70,14 +70,22 @@ async function handleAdd(interaction) {
     const role = interaction.options.getRole("role", true);
     const channel = interaction.options.getChannel("channel") ?? interaction.channel;
 
-    // Enforce free tier limit
+    // Enforce free tier limit. Pre-check whether this is an UPDATE of an
+    // existing (messageId,emoji) pair (which doesn't grow the count) or a
+    // brand-new row that would push us over the limit.
     const premium = await isPremiumGuild(guild.id);
     if (!premium) {
-        const existing = await db.select().from(reactionRolesTable).where(eq(reactionRolesTable.guildId, guild.id));
-        if (existing.length >= FREE_REACTION_ROLE_LIMIT) {
-            return interaction.editReply({
-                embeds: [premiumDeniedEmbed("Reaction Roles (unlimited)")],
-            });
+        const [existingPair] = await db
+            .select()
+            .from(reactionRolesTable)
+            .where(and(eq(reactionRolesTable.messageId, messageId), eq(reactionRolesTable.emoji, emoji)));
+        if (!existingPair) {
+            const all = await db.select().from(reactionRolesTable).where(eq(reactionRolesTable.guildId, guild.id));
+            if (all.length >= FREE_REACTION_ROLE_LIMIT) {
+                return interaction.editReply({
+                    embeds: [premiumDeniedEmbed("Reaction Roles (unlimited)")],
+                });
+            }
         }
     }
 

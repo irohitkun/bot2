@@ -2,13 +2,20 @@ import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, } from "discord
 import { db, giveawaysTable } from "../db/index.js";
 import { eq, and } from "drizzle-orm";
 import { isPremiumGuild, premiumDeniedEmbed, getPremiumTip } from "../utils/permissions.js";
+// Max safe setTimeout delay in Node.js is 2^31-1 ms (~24.8 days).
+// We cap at 14 days to leave headroom and match common giveaway expectations.
+const MAX_GIVEAWAY_MS = 14 * 24 * 60 * 60 * 1000;
+
 function parseDuration(input) {
     const match = input.match(/^(\d+)(s|m|h|d)$/i);
     if (!match)
         return null;
     const v = parseInt(match[1], 10);
     const multipliers = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
-    return v * multipliers[match[2].toLowerCase()];
+    const ms = v * multipliers[match[2].toLowerCase()];
+    if (ms <= 0 || ms > MAX_GIVEAWAY_MS)
+        return null;
+    return ms;
 }
 async function pickWinners(messageId, channelId, winnersCount, client) {
     const channel = await client.channels.fetch(channelId).catch(() => null);
@@ -49,7 +56,7 @@ export async function execute(interaction) {
         const targetChannel = (interaction.options.getChannel("channel") ?? interaction.channel);
         const durationMs = parseDuration(durationStr);
         if (!durationMs)
-            return interaction.reply({ content: "❌ Invalid duration. Use formats like `10m`, `1h`, `7d`.", flags: 64 });
+            return interaction.reply({ content: "❌ Invalid duration. Use formats like `10m`, `1h`, `7d` (max 14 days).", flags: 64 });
         const endsAt = new Date(Date.now() + durationMs);
         const embed = new EmbedBuilder().setColor(0xf1c40f).setTitle("🎉 GIVEAWAY 🎉")
             .setDescription(`**Prize:** ${prize}\n\nReact with 🎉 to enter!\n\n**Ends:** <t:${Math.floor(endsAt.getTime() / 1000)}:R>\n**Winners:** ${winnersCount}`)

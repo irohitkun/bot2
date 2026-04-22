@@ -147,6 +147,16 @@ async function sendExpiredNotice(client, row) {
 
 // ── Giveaway recovery (handles bot restarts) ──────────────────────────────────
 
+// Node setTimeout silently truncates delays > 2^31-1 ms (~24.8 days) to 1 ms.
+// Chunk long delays so legacy giveaways still fire at the right time.
+const MAX_TIMEOUT_MS = 2_147_483_647;
+function safeSetTimeout(fn, delay) {
+    if (delay > MAX_TIMEOUT_MS) {
+        return setTimeout(() => safeSetTimeout(fn, delay - MAX_TIMEOUT_MS), MAX_TIMEOUT_MS);
+    }
+    return setTimeout(fn, Math.max(0, delay));
+}
+
 async function recoverActiveGiveaways(client) {
     try {
         const active = await db.select().from(giveawaysTable).where(eq(giveawaysTable.ended, false));
@@ -162,7 +172,7 @@ async function recoverActiveGiveaways(client) {
                 // Already past due — end immediately
                 await endGiveaway(client, row);
             } else {
-                setTimeout(() => endGiveaway(client, row), delay);
+                safeSetTimeout(() => endGiveaway(client, row), delay);
                 console.log(`[Giveaways] Scheduled giveaway ${row.id} to end in ${Math.round(delay / 1000)}s`);
             }
         }

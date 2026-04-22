@@ -101,12 +101,18 @@ export async function execute(message) {
         .where(eq(automodSettingsTable.guildId, guildId));
 
     if (automod?.enabled) {
-        const content = message.content.toLowerCase();
+        const lowerContent = message.content.toLowerCase();
         const snippet = message.content.length > 200 ? message.content.slice(0, 200) + "…" : message.content;
 
         if (automod.badWords) {
-            const banned = automod.badWords.split(",").filter(Boolean);
-            const matched = banned.find((w) => content.includes(w));
+            const banned = automod.badWords
+                .split(",")
+                .map((w) => w.trim().toLowerCase())
+                .filter(Boolean);
+            const matched = banned.find((w) => {
+                const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                return new RegExp(`\\b${escaped}\\b`).test(lowerContent);
+            });
             if (matched) {
                 await message.delete().catch(() => {});
                 const warn = await message.channel.send(`⚠️ ${message.author}, that word is not allowed here.`);

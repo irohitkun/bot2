@@ -239,7 +239,8 @@ async function handleClose(interaction) {
         .where(eq(ticketsTable.id, ticket.id));
 
     await interaction.editReply({ content: "✅ Ticket closed. Deleting channel in 5 seconds..." });
-    setTimeout(() => channel.delete(`Ticket closed by ${interaction.user.tag}: ${reason}`).catch(() => {}), 5000);
+    await new Promise((r) => setTimeout(r, 5000));
+    await channel.delete(`Ticket closed by ${interaction.user.tag}: ${reason}`).catch(() => {});
 }
 
 async function handleAdd(interaction) {
