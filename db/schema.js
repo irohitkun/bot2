@@ -62,7 +62,16 @@ export const giveawaysTable = pgTable("giveaways", {
     hostTag: text("host_tag").notNull(),
     endsAt: timestamp("ends_at").notNull(),
     ended: boolean("ended").notNull().default(false),
+    cancelled: boolean("cancelled").notNull().default(false),
     winners: text("winners").notNull().default(""),
+    // Eligibility: optional role required to enter, optional minimum
+    // account age (in days) measured from Discord account creation.
+    requiredRoleId: text("required_role_id"),
+    minAccountAgeDays: integer("min_account_age_days"),
+    // Bonus entries: a comma-separated list of role IDs whose holders get
+    // (1 + bonusEntries) total entries instead of 1.
+    bonusRoleIds: text("bonus_role_ids").notNull().default(""),
+    bonusEntries: integer("bonus_entries").notNull().default(0),
 });
 
 export const afkUsersTable = pgTable("afk_users", {
