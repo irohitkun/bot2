@@ -1,5 +1,4 @@
 import { EmbedBuilder } from "discord.js";
-import { and, eq } from "drizzle-orm";
 import { db, remindersTable } from "../db/index.js";
 
 function parseDuration(input) {
@@ -47,13 +46,8 @@ export const command = {
             .setTimestamp();
 
         await message.reply({ embeds: [embed] });
-
-        setTimeout(async () => {
-            try {
-                await message.channel.send({ content: `⏰ <@${message.author.id}> **Reminder:** ${reminderText}` });
-                await db.delete(remindersTable).where(and(eq(remindersTable.userId, message.author.id), eq(remindersTable.message, reminderText)));
-            }
-            catch { }
-        }, ms);
+        // Delivery is handled by the global reminder poller in events/ready.js
+        // (no in-process setTimeout — that would silently truncate >24.8d delays
+        // and would not survive a bot restart).
     },
 };
