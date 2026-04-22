@@ -3,6 +3,7 @@ import { registerSlashCommands } from "../utils/registerCommands.js";
 import { db, premiumGuildsTable, giveawaysTable, remindersTable } from "../db/index.js";
 import { eq, and, lte, isNotNull, lt } from "drizzle-orm";
 import { invalidatePremiumCache } from "../utils/permissions.js";
+import { scheduleGiveawayEnd } from "../utils/giveawayScheduler.js";
 
 const TIER_ICONS = { free: "🔓", basic: "⭐", pro: "💎", enterprise: "👑" };
 
@@ -147,87 +148,20 @@ async function sendExpiredNotice(client, row) {
 
 // ── Giveaway recovery (handles bot restarts) ──────────────────────────────────
 
-// Node setTimeout silently truncates delays > 2^31-1 ms (~24.8 days) to 1 ms.
-// Chunk long delays so legacy giveaways still fire at the right time.
-const MAX_TIMEOUT_MS = 2_147_483_647;
-function safeSetTimeout(fn, delay) {
-    if (delay > MAX_TIMEOUT_MS) {
-        return setTimeout(() => safeSetTimeout(fn, delay - MAX_TIMEOUT_MS), MAX_TIMEOUT_MS);
-    }
-    return setTimeout(fn, Math.max(0, delay));
-}
-
 async function recoverActiveGiveaways(client) {
     try {
         const active = await db.select().from(giveawaysTable).where(eq(giveawaysTable.ended, false));
         if (active.length === 0) return;
 
-        const now = Date.now();
         console.log(`[Giveaways] Recovering ${active.length} active giveaway(s)...`);
 
         for (const row of active) {
-            const delay = Math.max(0, row.endsAt.getTime() - now);
-
-            if (delay === 0) {
-                // Already past due — end immediately
-                await endGiveaway(client, row);
-            } else {
-                safeSetTimeout(() => endGiveaway(client, row), delay);
-                console.log(`[Giveaways] Scheduled giveaway ${row.id} to end in ${Math.round(delay / 1000)}s`);
-            }
+            scheduleGiveawayEnd(client, row);
+            const delay = Math.max(0, row.endsAt.getTime() - Date.now());
+            console.log(`[Giveaways] Scheduled giveaway ${row.id} to end in ${Math.round(delay / 1000)}s`);
         }
     } catch (err) {
         console.error("[Giveaways] Recovery error:", err);
-    }
-}
-
-async function endGiveaway(client, row) {
-    try {
-        // Re-check still active
-        const [current] = await db.select().from(giveawaysTable).where(eq(giveawaysTable.id, row.id));
-        if (!current || current.ended) return;
-
-        const channel = await client.channels.fetch(row.channelId).catch(() => null);
-        const message = channel ? await channel.messages.fetch(row.messageId).catch(() => null) : null;
-
-        let winners = [];
-        if (message) {
-            const reaction = message.reactions.cache.get("🎉");
-            if (reaction) {
-                const users = await reaction.users.fetch();
-                const eligible = [...users.values()].filter((u) => !u.bot);
-                winners = eligible
-                    .sort(() => Math.random() - 0.5)
-                    .slice(0, Math.min(row.winnersCount, eligible.length))
-                    .map((u) => u.id);
-            }
-        }
-
-        await db.update(giveawaysTable)
-            .set({ ended: true, winners: winners.join(",") })
-            .where(eq(giveawaysTable.id, row.id));
-
-        if (message) {
-            const endEmbed = new EmbedBuilder()
-                .setColor(winners.length > 0 ? 0x57f287 : 0xed4245)
-                .setTitle("🎉 Giveaway Ended!")
-                .setDescription(
-                    winners.length > 0
-                        ? `**Prize:** ${row.prize}\n**Winner${winners.length > 1 ? "s" : ""}:** ${winners.map((id) => `<@${id}>`).join(", ")}`
-                        : `**Prize:** ${row.prize}\n\nNo valid entries!`
-                )
-                .setTimestamp();
-            await message.edit({ embeds: [endEmbed] }).catch(() => {});
-            if (winners.length > 0 && channel) {
-                await channel
-                    .send(`🎉 Congratulations ${winners.map((id) => `<@${id}>`).join(", ")}! You won **${row.prize}**!`)
-                    .catch(() => {});
-            }
-        }
-
-        console.log(`[Giveaways] Ended giveaway ${row.id} (${row.prize})`);
-    } catch (err) {
-        console.error(`[Giveaways] Error ending giveaway ${row.id}:`, err);
     }
 }
 

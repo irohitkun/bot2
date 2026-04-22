@@ -2,9 +2,11 @@ import { EmbedBuilder, PermissionFlagsBits } from "discord.js";
 import { db, giveawaysTable } from "../db/index.js";
 import { eq, and } from "drizzle-orm";
 import { isPremiumGuild, premiumDeniedEmbed, getPremiumTip } from "../utils/permissions.js";
+import { scheduleGiveawayEnd } from "../utils/giveawayScheduler.js";
 
-// Match the slash command: cap at 14 days so Node setTimeout (max ~24.8d) never overflows.
-const MAX_GIVEAWAY_MS = 14 * 24 * 60 * 60 * 1000;
+// Match the slash command. Long delays are chunked via safeSetTimeout in the
+// scheduler, so we are not bound by Node's ~24.8d setTimeout limit.
+const MAX_GIVEAWAY_MS = 30 * 24 * 60 * 60 * 1000;
 
 function parseGiveawayDuration(input) {
     const match = input?.match(/^(\d+)(s|m|h|d)$/i);
@@ -33,8 +35,8 @@ async function pickWinners(messageId, channelId, winnersCount, client) {
 
 export const command = {
     name: "giveaway",
-    usage: "%giveaway <start|end|reroll> ...",
-    description: "Start, end, or reroll a giveaway",
+    usage: "%giveaway <start|end|extend|reroll> ...",
+    description: "Start, end, extend, or reroll a giveaway",
     async execute(message, args) {
         if (!message.member?.permissions.has(PermissionFlagsBits.ManageGuild)) {
             return void message.reply("❌ You need **Manage Server** permission.");
@@ -55,7 +57,7 @@ export const command = {
 
             const durationMs = parseGiveawayDuration(durationStr);
             if (!durationMs) {
-                return void message.reply("❌ Invalid duration. Use formats like `10m`, `1h`, `7d` (max 14 days).");
+                return void message.reply("❌ Invalid duration. Use formats like `10m`, `1h`, `7d` (max 30 days).");
             }
 
             const endsAt = new Date(Date.now() + durationMs);
@@ -75,7 +77,7 @@ export const command = {
             const giveawayMsg = await channel.send({ embeds: [embed] });
             await giveawayMsg.react("🎉");
 
-            await db.insert(giveawaysTable).values({
+            const [inserted] = await db.insert(giveawaysTable).values({
                 guildId,
                 channelId: channel.id,
                 messageId: giveawayMsg.id,
@@ -84,41 +86,13 @@ export const command = {
                 hostId: message.author.id,
                 hostTag: message.author.tag,
                 endsAt,
-            });
+            }).returning();
 
             const premium = await isPremiumGuild(guildId);
             const tipLine = premium ? "" : `\n-# ${getPremiumTip("giveaway")}`;
             await message.reply(`✅ Giveaway started!${tipLine}`);
 
-            setTimeout(async () => {
-                const [row] = await db
-                    .select()
-                    .from(giveawaysTable)
-                    .where(and(eq(giveawaysTable.messageId, giveawayMsg.id), eq(giveawaysTable.ended, false)));
-                if (!row) return;
-                const winners = await pickWinners(giveawayMsg.id, channel.id, winnersCount, message.client);
-                await db
-                    .update(giveawaysTable)
-                    .set({ ended: true, winners: winners.join(",") })
-                    .where(eq(giveawaysTable.messageId, giveawayMsg.id));
-
-                const endEmbed = new EmbedBuilder()
-                    .setColor(winners.length > 0 ? 0x57f287 : 0xed4245)
-                    .setTitle("🎉 Giveaway Ended!")
-                    .setDescription(
-                        winners.length > 0
-                            ? `**Prize:** ${prize}\n**Winner${winners.length > 1 ? "s" : ""}:** ${winners.map((id) => `<@${id}>`).join(", ")}`
-                            : `**Prize:** ${prize}\n\nNo valid entries!`
-                    )
-                    .setTimestamp();
-                await giveawayMsg.edit({ embeds: [endEmbed] }).catch(() => {});
-                if (winners.length > 0) {
-                    await channel
-                        .send(`🎉 Congratulations ${winners.map((id) => `<@${id}>`).join(", ")}! You won **${prize}**!`)
-                        .catch(() => {});
-                }
-            }, durationMs);
-
+            scheduleGiveawayEnd(message.client, inserted);
             return;
         }
 
@@ -172,6 +146,60 @@ export const command = {
             );
         }
 
+        // ── extend ─────────────────────────────────────────────────────────────
+        if (sub === "extend") {
+            const messageId = args[1]?.trim();
+            const extraStr = args[2];
+            if (!messageId || !extraStr) {
+                return void message.reply("Usage: `%giveaway extend <message_id> <duration>` — e.g. `%giveaway extend 1234567890 2h`");
+            }
+
+            const extraMs = parseGiveawayDuration(extraStr);
+            if (!extraMs) {
+                return void message.reply("❌ Invalid duration. Use formats like `30m`, `2h`, `5d` (max 30 days).");
+            }
+
+            const [row] = await db
+                .select()
+                .from(giveawaysTable)
+                .where(and(eq(giveawaysTable.messageId, messageId), eq(giveawaysTable.ended, false)));
+            if (!row) {
+                return void message.reply("❌ No active giveaway found with that message ID.");
+            }
+
+            const newEndsAt = new Date(row.endsAt.getTime() + extraMs);
+            const remainingFromNow = newEndsAt.getTime() - Date.now();
+            if (remainingFromNow > MAX_GIVEAWAY_MS) {
+                return void message.reply("❌ That extension would push the giveaway past the 30 day maximum remaining duration.");
+            }
+
+            await db
+                .update(giveawaysTable)
+                .set({ endsAt: newEndsAt })
+                .where(eq(giveawaysTable.id, row.id));
+
+            const channel = await message.client.channels.fetch(row.channelId).catch(() => null);
+            if (channel) {
+                const giveawayMsg = await channel.messages.fetch(messageId).catch(() => null);
+                if (giveawayMsg) {
+                    const updatedEmbed = new EmbedBuilder()
+                        .setColor(0xf1c40f)
+                        .setTitle("🎉 GIVEAWAY 🎉")
+                        .setDescription(
+                            `**Prize:** ${row.prize}\n\nReact with 🎉 to enter!\n\n` +
+                            `**Ends:** <t:${Math.floor(newEndsAt.getTime() / 1000)}:R>\n` +
+                            `**Winners:** ${row.winnersCount}`
+                        )
+                        .setFooter({ text: `Hosted by ${row.hostTag}` })
+                        .setTimestamp(newEndsAt);
+                    await giveawayMsg.edit({ embeds: [updatedEmbed] }).catch(() => {});
+                }
+            }
+
+            scheduleGiveawayEnd(message.client, { ...row, endsAt: newEndsAt });
+            return void message.reply(`✅ Giveaway extended! New end time: <t:${Math.floor(newEndsAt.getTime() / 1000)}:R>`);
+        }
+
         // ── reroll (premium) ──────────────────────────────────────────────────
         if (sub === "reroll") {
             if (!(await isPremiumGuild(guildId))) {
@@ -205,6 +233,7 @@ export const command = {
             "Usage:\n" +
             "`%giveaway start <duration> <winners> <prize>`\n" +
             "`%giveaway end <message_id>`\n" +
+            "`%giveaway extend <message_id> <duration>`\n" +
             "`%giveaway reroll <message_id>` *(Premium)*"
         );
     },
