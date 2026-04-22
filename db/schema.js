@@ -32,7 +32,7 @@ export const premiumGuildsTable = pgTable("premium_guilds", {
     activatedByTag: text("activated_by_tag").notNull(),
     activatedAt: timestamp("activated_at").notNull().defaultNow(),
     expiresAt: timestamp("expires_at"),
-    tier: text("tier").notNull().default("basic"),
+    tier: text("tier").notNull().default("premium"),
     notes: text("notes"),
     isTrial: boolean("is_trial").notNull().default(false),
     reminderSent: boolean("reminder_sent").notNull().default(false),

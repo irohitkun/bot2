@@ -6,15 +6,18 @@ const premiumCache = new Map();
 const FALLBACK_BOT_OWNERS = ["1298631508533313536"];
 
 // ── Tier definitions ─────────────────────────────────────────────────────────
+// Only two tiers exist: free and premium. Legacy values like "basic", "pro",
+// or "enterprise" are normalized to "premium" wherever they're read.
 export const TIERS = {
     free: 0,
     premium: 1,
-    basic: 1,
-    pro: 1,
-    enterprise: 1,
 };
 
 export const TIER_NAMES = ["free", "premium"];
+
+export function normalizeTier(tier) {
+    return tier === "free" ? "free" : "premium";
+}
 
 export const TIER_FEATURES = {
     free: [

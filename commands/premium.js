@@ -3,8 +3,8 @@ import { db, premiumGuildsTable } from "../db/index.js";
 import { eq } from "drizzle-orm";
 import { isBotOwner, invalidatePremiumCache, TIER_FEATURES } from "../utils/permissions.js";
 
-const TIER_ICONS  = { free: "🔓", premium: "⭐", basic: "⭐", pro: "⭐", enterprise: "⭐" };
-const TIER_COLORS = { free: 0x95a5a6, premium: 0xf1c40f, basic: 0xf1c40f, pro: 0xf1c40f, enterprise: 0xf1c40f };
+const TIER_ICONS  = { free: "🔓", premium: "⭐" };
+const TIER_COLORS = { free: 0x95a5a6, premium: 0xf1c40f };
 
 async function getGuildDisplayName(client, guildId) {
     const cached = client.guilds.cache.get(guildId);

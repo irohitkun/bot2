@@ -2,10 +2,10 @@ import { Events, ActivityType, EmbedBuilder } from "discord.js";
 import { registerSlashCommands } from "../utils/registerCommands.js";
 import { db, premiumGuildsTable, giveawaysTable, remindersTable } from "../db/index.js";
 import { eq, and, lte, isNotNull, lt } from "drizzle-orm";
-import { invalidatePremiumCache } from "../utils/permissions.js";
+import { invalidatePremiumCache, normalizeTier } from "../utils/permissions.js";
 import { scheduleGiveawayEnd } from "../utils/giveawayScheduler.js";
 
-const TIER_ICONS = { free: "🔓", basic: "⭐", pro: "💎", enterprise: "👑" };
+const TIER_ICONS = { free: "🔓", premium: "⭐" };
 
 export const name = Events.ClientReady;
 export const once = true;
@@ -100,7 +100,7 @@ async function sendExpirationReminder(client, row) {
                 : "Contact the bot owner to renew your subscription.")
         )
         .addFields(
-            { name: "Tier", value: `${TIER_ICONS[row.tier] ?? "⭐"} ${row.tier}`, inline: true },
+            { name: "Tier", value: `${TIER_ICONS[normalizeTier(row.tier)] ?? "⭐"} ${normalizeTier(row.tier)}`, inline: true },
             { name: "Expires", value: `<t:${Math.floor(row.expiresAt.getTime() / 1000)}:R>`, inline: true },
         )
         .setTimestamp();
@@ -129,7 +129,7 @@ async function sendExpiredNotice(client, row) {
                 : "Contact the bot owner to renew your subscription.")
         )
         .addFields(
-            { name: "Was Tier", value: `${TIER_ICONS[row.tier] ?? "⭐"} ${row.tier}`, inline: true },
+            { name: "Was Tier", value: `${TIER_ICONS[normalizeTier(row.tier)] ?? "⭐"} ${normalizeTier(row.tier)}`, inline: true },
             { name: "Expired", value: `<t:${Math.floor(row.expiresAt.getTime() / 1000)}:R>`, inline: true },
         )
         .setTimestamp();

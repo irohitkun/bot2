@@ -1,9 +1,8 @@
 import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
 import { db, premiumGuildsTable } from "../db/index.js";
-import { isBotOwner } from "../utils/permissions.js";
+import { isBotOwner, normalizeTier } from "../utils/permissions.js";
 
-const TIER_ICONS  = { free: "🔓", basic: "⭐", pro: "💎", enterprise: "👑" };
-const TIER_COLORS = { basic: 0xf1c40f, pro: 0x3498db, enterprise: 0x9b59b6 };
+const TIER_ICONS  = { free: "🔓", premium: "⭐" };
 
 async function getGuildDisplayName(client, guildId) {
     const cached = client.guilds.cache.get(guildId);
@@ -44,7 +43,8 @@ export async function execute(interaction) {
 
     if (active.length > 0) {
         const lines = await Promise.all(active.map(async (r) => {
-            const icon = TIER_ICONS[r.tier] ?? "⭐";
+            const tier = normalizeTier(r.tier);
+            const icon = TIER_ICONS[tier] ?? "⭐";
             const trial = r.isTrial ? " 🆕" : "";
             const expiry = r.expiresAt
                 ? `Expires <t:${Math.floor(r.expiresAt.getTime() / 1000)}:R>`
@@ -54,7 +54,7 @@ export async function execute(interaction) {
             const guildName = await getGuildDisplayName(interaction.client, r.guildId);
             return [
                 `**Guild:** ${guildName} (\`${r.guildId}\`)`,
-                `${icon} **${r.tier}**${trial} • Activated: ${activated} • ${expiry}${notify}`,
+                `${icon} **${tier}**${trial} • Activated: ${activated} • ${expiry}${notify}`,
                 `Activated by: ${r.activatedByTag}`,
                 `Notes: ${r.notes || "None"}`,
             ].join("\n");
@@ -96,11 +96,12 @@ export async function execute(interaction) {
     // Show expired entries too if any
     if (expired.length > 0) {
         const expiredLines = (await Promise.all(expired.map(async (r) => {
-            const icon = TIER_ICONS[r.tier] ?? "⭐";
+            const tier = normalizeTier(r.tier);
+            const icon = TIER_ICONS[tier] ?? "⭐";
             const trial = r.isTrial ? " 🆕" : "";
             const guildName = await getGuildDisplayName(interaction.client, r.guildId);
             const note = r.notes ? ` — Notes: ${r.notes}` : "";
-            return `**${guildName}** (\`${r.guildId}\`) — ${icon} **${r.tier}**${trial} — Expired <t:${Math.floor(r.expiresAt.getTime() / 1000)}:R> — by ${r.activatedByTag}${note}`;
+            return `**${guildName}** (\`${r.guildId}\`) — ${icon} **${tier}**${trial} — Expired <t:${Math.floor(r.expiresAt.getTime() / 1000)}:R> — by ${r.activatedByTag}${note}`;
         }))).join("\n");
 
         await interaction.followUp({
