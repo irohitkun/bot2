@@ -5,6 +5,7 @@ import { ticketSettingsTable, ticketsTable } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { getGuildStyle } from "../utils/guildStyle.js";
 import { fetchAllMessages } from "../utils/fetchAllMessages.js";
+import { executePlanByToken, peekPendingPlan, consumePendingPlan, logAIRun } from "../utils/aiAssistant.js";
 
 export const name = Events.InteractionCreate;
 export const once = false;
@@ -46,7 +47,62 @@ export async function execute(interaction) {
         if (customId === "ticket:close") {
             return handleCloseTicketButton(interaction);
         }
+
+        if (customId.startsWith("aiplan:")) {
+            return handleAIPlanButton(interaction);
+        }
     }
+}
+
+async function handleAIPlanButton(interaction) {
+    const [, action, token] = interaction.customId.split(":");
+    if (!token) return interaction.reply({ content: "❌ Invalid plan token.", flags: 64 }).catch(() => {});
+
+    const entry = peekPendingPlan(token);
+    if (!entry) {
+        return interaction.update({
+            content: "",
+            embeds: [new EmbedBuilder().setColor(0x95a5a6).setTitle("🤖 AI Assistant").setDescription("This plan has expired or already been resolved.")],
+            components: [],
+        }).catch(() => {});
+    }
+    if (entry.invokerId !== interaction.user.id) {
+        return interaction.reply({ content: `❌ Only <@${entry.invokerId}> can approve this plan.`, flags: 64 }).catch(() => {});
+    }
+
+    if (action === "cancel") {
+        consumePendingPlan(token);
+        await logAIRun({
+            guild: interaction.guild,
+            channel: interaction.channel,
+            member: interaction.member,
+            prompt: entry.prompt,
+            planSummary: entry.planSummary,
+            actions: entry.actions,
+            results: [],
+            status: "cancelled",
+        });
+        return interaction.update({
+            content: "",
+            embeds: [new EmbedBuilder().setColor(0x95a5a6).setTitle("🤖 AI Assistant — Cancelled").setDescription(`Plan cancelled by <@${interaction.user.id}>.`).setTimestamp()],
+            components: [],
+        }).catch(() => {});
+    }
+
+    if (action === "approve") {
+        await interaction.deferUpdate().catch(() => {});
+        const result = await executePlanByToken(interaction.client, token, interaction.user.id);
+        if (!result.ok) {
+            return interaction.editReply({
+                content: "",
+                embeds: [new EmbedBuilder().setColor(0xed4245).setTitle("🤖 AI Assistant").setDescription(`❌ ${result.error}`)],
+                components: [],
+            }).catch(() => {});
+        }
+        return interaction.editReply(result.payload).catch(() => {});
+    }
+
+    return interaction.reply({ content: "❌ Unknown plan action.", flags: 64 }).catch(() => {});
 }
 
 async function handleOpenTicket(interaction) {
