@@ -73,6 +73,8 @@ export const helpCategories = [
         key: "premium",
         label: "Premium",
         commands: [
+            ["/ai", "AI Assistant — describe an action and the bot performs it"],
+            ["/ailog", "View recent AI Assistant audit log entries"],
             ["/perks", "View this server's plan and enabled features"],
             ["/premium", "Manage premium access"],
             ["/premiumadmin", "View premium administration tools"],
@@ -84,6 +86,8 @@ export const helpCategories = [
 export const prefixCommandNames = new Set([
     "8ball",
     "afk",
+    "ai",
+    "ailog",
     "avatar",
     "ban",
     "banner",

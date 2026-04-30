@@ -55,7 +55,7 @@ export function getAIStatus() {
     };
 }
 
-export async function createAIChatCompletion({ messages, maxTokens = 1024 }) {
+export async function createAIChatCompletion({ messages, maxTokens = 1024, responseFormat, model }) {
     const config = getProviderConfig();
     if (!config.apiKey || !config.model) {
         throw new Error(config.missingMessage);
@@ -69,9 +69,28 @@ export async function createAIChatCompletion({ messages, maxTokens = 1024 }) {
         });
         clients.set(cacheKey, client);
     }
-    return client.chat.completions.create({
-        model: config.model,
+    const payload = {
+        model: model ?? config.model,
         max_tokens: maxTokens,
         messages,
-    });
+    };
+    if (responseFormat) {
+        payload.response_format = responseFormat;
+    }
+    return client.chat.completions.create(payload);
+}
+
+/**
+ * Returns a model id that's better suited to structured JSON planning.
+ * Falls back to the provider's default model if no override is set.
+ */
+export function getAssistantModel() {
+    const override = process.env.AI_ASSISTANT_MODEL?.trim();
+    if (override) return override;
+    const config = getProviderConfig();
+    if (config.provider === "groq") {
+        // llama-3.3-70b-versatile is far better at structured JSON planning than 8b-instant.
+        return "llama-3.3-70b-versatile";
+    }
+    return config.model;
 }

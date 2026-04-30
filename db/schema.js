@@ -144,6 +144,27 @@ export const ticketsTable = pgTable("tickets", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ── AI Assistant Audit Log ───────────────────────────────────────────────────
+// Records every premium AI Assistant invocation: prompt, planned actions, outcomes,
+// and resolution status. Used by /ailog and %ailog to give server admins a full
+// audit trail of natural-language commands.
+
+export const aiAssistantLogsTable = pgTable("ai_assistant_logs", {
+    id: serial("id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    userId: text("user_id").notNull(),
+    userTag: text("user_tag").notNull(),
+    channelId: text("channel_id").notNull(),
+    prompt: text("prompt").notNull(),
+    planSummary: text("plan_summary"),
+    actionsJson: text("actions_json").notNull(),   // JSON.stringify of the planned tool calls
+    resultsJson: text("results_json").notNull(),   // JSON.stringify of [{tool, ok, summary}]
+    succeeded: integer("succeeded").notNull().default(0),
+    failed: integer("failed").notNull().default(0),
+    status: text("status").notNull().default("executed"), // executed | cancelled | expired | error
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // ── Reaction Roles ───────────────────────────────────────────────────────────
 
 export const reactionRolesTable = pgTable("reaction_roles", {

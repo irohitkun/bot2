@@ -37,6 +37,8 @@ export const TIER_FEATURES = {
     ],
     premium: [
         "Everything in Free",
+        "AI Assistant — natural-language moderation, channel/role lifecycle, ticket setup, announcements (/ai, %ai)",
+        "AI Assistant audit log (/ailog, %ailog)",
         "Custom bot prefix (setprefix)",
         "Server customization (embed color, footer text)",
         "AutoMod (word filter, spam protection, mention limits)",
@@ -52,6 +54,27 @@ export const TIER_FEATURES = {
 
 // ── Feature-specific denial descriptions ─────────────────────────────────────
 const FEATURE_DETAILS = {
+    "AI Assistant": {
+        icon: "🤖",
+        pitch: "Describe what you want done in plain English and the bot does it — moderation (ban, kick, timeout, warn, purge), channel/role lifecycle (create, rename, delete, set topic), ticket panel setup, server announcements, and more. Destructive actions show a preview with Approve/Cancel buttons. Every plan is recorded to an audit log queryable with /ailog.",
+        perks: [
+            "20+ tools: moderation, channel & role lifecycle, ticket panel setup, announcements",
+            "Natural-language commands (\"create #announcements with topic 'team news', then post a welcome message\")",
+            "Approve/Cancel preview for destructive actions (ban, kick, delete, purge, lock, announce)",
+            "Full audit log of every prompt + outcome (/ailog, %ailog)",
+            "Respects role hierarchy + per-action Discord permissions",
+            "Works via /ai, %ai, and no-prefix mode",
+        ],
+    },
+    "AI Assistant Audit Log": {
+        icon: "📜",
+        pitch: "Review every AI Assistant run on your server — who asked, what they asked, what the AI planned, and what actually happened.",
+        perks: [
+            "See the most recent runs with /ailog",
+            "Filter by user with /ailog user:@someone",
+            "Tracks succeeded/failed action counts and cancelled previews",
+        ],
+    },
     "AutoMod": {
         icon: "🛡️",
         pitch: "AutoMod watches your server 24/7 — automatically deleting banned words, killing spam, capping mentions and caps abuse, and logging every violation to a private channel.",
