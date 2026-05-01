@@ -1,0 +1,132 @@
+{
+  "name": "Bot",
+  "tagline": "Fast, modular server management bot with premium AI features",
+  "version": "2.2.0",
+  "changelog": [
+    "v2.2.0 — AI tools expanded: create/delete/rename channels, create/delete roles, setup ticket panels, send announcements, create giveaways, create polls. Features registry added. /features command added.",
+    "v2.1.0 — AI Assistant audit log (ai_assistant_logs table). /ailog and %ailog commands for admins.",
+    "v2.0.0 — Premium AI Assistant (/ai, %ai, no-prefix ai). 12 initial tools: ban, kick, timeout, untimeout, warn, purge, lock, unlock, slowmode, add/remove role, set nickname. Approval flow for destructive actions.",
+    "v1.x — Core moderation, economy, ticket system, giveaways, reaction roles, automod, XP/leveling, no-prefix mode."
+  ],
+  "modules": {
+    "moderation": {
+      "title": "Moderation",
+      "items": [
+        "Ban members with optional message deletion (1-7 days)",
+        "Kick members from the server",
+        "Timeout members (up to 28 days) and remove timeouts",
+        "Warn members — warnings persist in database, DM is sent",
+        "View and clear warnings per user (/warnings, /clearwarn)",
+        "Purge up to 100 messages, optionally filtered by user",
+        "Unban members by user ID"
+      ]
+    },
+    "channel_management": {
+      "title": "Channel Management",
+      "items": [
+        "Lock channels (deny @everyone SendMessages)",
+        "Unlock channels",
+        "Set slowmode (0 to 6 hours per message)",
+        "Create text, voice, category, or announcement channels",
+        "Delete channels",
+        "Rename channels",
+        "Set or clear channel topics"
+      ]
+    },
+    "role_management": {
+      "title": "Role Management",
+      "items": [
+        "Create roles (name, color, hoist, mentionable)",
+        "Delete roles",
+        "Add and remove roles from members",
+        "Set or reset member nicknames",
+        "Reaction roles — members self-assign roles by reacting to messages"
+      ]
+    },
+    "tickets": {
+      "title": "Ticket System",
+      "items": [
+        "Full ticket system setup — auto-creates category and transcript channel if not configured",
+        "Post ticket panel with Open Ticket button in any channel",
+        "Each ticket gets a private channel visible only to the user and support role",
+        "Ticket transcripts auto-saved to a transcript channel on close",
+        "Add or remove users from active tickets",
+        "View ticket system config (/ticket config)"
+      ]
+    },
+    "giveaways": {
+      "title": "Giveaways",
+      "items": [
+        "Start giveaways with prize, duration, winner count",
+        "Optional role requirement (only members with that role can win)",
+        "Optional minimum account age filter",
+        "Bonus entries for a specific role",
+        "End, cancel, extend, or reroll giveaways",
+        "List all active giveaways in the server"
+      ]
+    },
+    "polls": {
+      "title": "Polls",
+      "items": [
+        "Create polls with a question and up to 10 options",
+        "Members vote by reacting with numbered emoji",
+        "Works in any channel the bot has access to"
+      ]
+    },
+    "economy": {
+      "title": "Economy & Levels",
+      "items": [
+        "XP earned from chatting (1 XP per message, 60s cooldown)",
+        "Levels calculated from XP — view with /rank or %rank",
+        "Coins earned from daily rewards — use /daily or %daily",
+        "Daily login streak tracked and displayed",
+        "Full profile card (/profile or %profile)",
+        "Server leaderboard (/leaderboard)"
+      ]
+    },
+    "automod": {
+      "title": "AutoMod (Premium)",
+      "items": [
+        "Word filter — define banned words/phrases",
+        "Anti-spam — auto-delete if 5+ messages in 5 seconds",
+        "Mention flood protection — configurable limit",
+        "Excessive caps detection — configurable percentage",
+        "All violations logged to a dedicated AutoMod log channel"
+      ]
+    },
+    "utilities": {
+      "title": "Utilities",
+      "items": [
+        "Server info, user info, avatar, banner",
+        "Math calculator, color preview, translate text",
+        "8ball, coinflip, dice — fun commands",
+        "AFK mode — bot replies on mention while AFK",
+        "Snipe — recover last deleted message in channel",
+        "Reminders — set a reminder for later",
+        "Custom embed builder (/embed)"
+      ]
+    },
+    "server_setup": {
+      "title": "Server Setup",
+      "items": [
+        "Custom bot prefix per server (/setprefix)",
+        "No-prefix mode — bot responds without any prefix at all",
+        "No-prefix access control — restrict no-prefix to specific roles/users",
+        "Custom embed color and footer text for server branding",
+        "Welcome messages — configured channel and custom message",
+        "Mod log channel — all ban/kick/mute/warn events sent automatically"
+      ]
+    },
+    "ai_assistant": {
+      "title": "AI Assistant (Premium)",
+      "items": [
+        "Natural-language commands — describe what to do and the bot does it",
+        "20 tools: moderation, channel lifecycle, role lifecycle, ticket setup, announcements, giveaways, polls",
+        "Approve/Cancel preview for destructive actions (ban, kick, purge, delete, lock, announce)",
+        "All runs recorded to an audit log — query with /ailog",
+        "Works via /ai, %ai, or no-prefix 'ai ...'",
+        "Powered by Groq (llama-3.3-70b-versatile) or OpenAI — configurable via AI_ASSISTANT_MODEL env var"
+      ]
+    }
+  }
+}

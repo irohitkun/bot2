@@ -25,11 +25,19 @@ import {
     ButtonStyle,
 } from "discord.js";
 import { randomBytes } from "crypto";
+import { createRequire } from "module";
 import { and, count, eq } from "drizzle-orm";
 import { createAIChatCompletion, getAIStatus, getAssistantModel } from "./aiProvider.js";
-import { db, warningsTable, aiAssistantLogsTable, ticketSettingsTable } from "../db/index.js";
+import { db, warningsTable, aiAssistantLogsTable, ticketSettingsTable, giveawaysTable } from "../db/index.js";
 import { sendModLog } from "./modLog.js";
 import { getGuildStyle } from "./guildStyle.js";
+import { scheduleGiveawayEnd } from "./giveawayScheduler.js";
+
+const _require = createRequire(import.meta.url);
+const FEATURES = _require("../config/features.json");
+
+const NUMBERS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
+const MAX_GIVEAWAY_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const MAX_ACTIONS = 10;
 const MAX_PURGE = 100;
@@ -609,6 +617,93 @@ const TOOLS = {
             return ok(`Ticket panel posted in ${channel} ([jump](${panelMsg.url})). Support role: ${supportRole ? `@${supportRole.name}` : "(none)"}.`);
         },
     },
+
+    // ── Engagement ──────────────────────────────────────────────────────────
+
+    create_giveaway: {
+        userPerm: PermissionFlagsBits.ManageGuild,
+        botPerm: PermissionFlagsBits.AddReactions,
+        describe: (a) => `Start giveaway **${a.prize ?? "?"}** in ${a.channel ?? "current channel"} for ${a.duration ?? "?"}${a.winners && a.winners > 1 ? ` (${a.winners} winners)` : ""}`,
+        async execute(ctx, args) {
+            const prize = String(args.prize ?? "").trim();
+            if (!prize) return fail("`prize` is required.");
+            const channel = await resolveChannel(ctx.guild, args.channel, ctx.channel);
+            if (!channel?.isTextBased?.()) return fail("Target channel is not text-based.");
+            const me = ctx.guild.members.me;
+            if (!channel.permissionsFor(me)?.has(PermissionFlagsBits.SendMessages)) {
+                return fail(`I can't send messages in ${channel}.`);
+            }
+            const durationStr = String(args.duration ?? "").trim();
+            const ms = parseDuration(durationStr);
+            if (!ms || ms <= 0 || ms > MAX_GIVEAWAY_MS) {
+                return fail(`Invalid duration \`${args.duration ?? ""}\`. Use formats like 10m, 1h, 2d (max 30d).`);
+            }
+            const winners = clampInt(args.winners, 1, 20, 1);
+            const endsAt = new Date(Date.now() + ms);
+            const insertValues = {
+                guildId: ctx.guild.id,
+                channelId: channel.id,
+                messageId: "pending",
+                prize,
+                winnersCount: winners,
+                hostId: ctx.member.id,
+                hostTag: ctx.member.user.tag,
+                endsAt,
+                requiredRoleId: null,
+                minAccountAgeDays: null,
+                bonusRoleIds: "",
+                bonusEntries: 0,
+            };
+            const embed = new EmbedBuilder()
+                .setColor(0xf1c40f)
+                .setTitle("🎉 GIVEAWAY 🎉")
+                .setDescription(`**Prize:** ${prize}\n\nReact with 🎉 to enter!\n\n**Ends:** <t:${Math.floor(endsAt.getTime() / 1000)}:R>\n**Winners:** ${winners}`)
+                .setFooter({ text: `Hosted by ${ctx.member.user.tag} via AI Assistant` })
+                .setTimestamp(endsAt);
+            const msg = await channel.send({ embeds: [embed] });
+            await msg.react("🎉");
+            insertValues.messageId = msg.id;
+            const [inserted] = await db.insert(giveawaysTable).values(insertValues).returning();
+            scheduleGiveawayEnd(ctx.guild.client ?? ctx.client, inserted);
+            return ok(`Giveaway started in ${channel}! Prize: **${prize}**, duration: ${durationStr}, winners: ${winners}. ([Jump](${msg.url}))`);
+        },
+    },
+
+    create_poll: {
+        userPerm: null,
+        botPerm: PermissionFlagsBits.AddReactions,
+        describe: (a) => {
+            const opts = Array.isArray(a.options) ? a.options : String(a.options ?? "").split("|").map((o) => o.trim()).filter(Boolean);
+            return `Post poll **${a.question ?? "?"}** with ${opts.length} option(s) in ${a.channel ?? "current channel"}`;
+        },
+        async execute(ctx, args) {
+            const question = String(args.question ?? "").trim();
+            if (!question) return fail("`question` is required.");
+            const rawOptions = Array.isArray(args.options)
+                ? args.options.map((o) => String(o).trim()).filter(Boolean)
+                : String(args.options ?? "").split("|").map((o) => o.trim()).filter(Boolean);
+            if (rawOptions.length < 2) return fail("Provide at least 2 options (pipe-separated or as an array).");
+            if (rawOptions.length > 10) return fail("Maximum 10 poll options.");
+            const channel = await resolveChannel(ctx.guild, args.channel, ctx.channel);
+            if (!channel?.isTextBased?.()) return fail("Target channel is not text-based.");
+            const me = ctx.guild.members.me;
+            if (!channel.permissionsFor(me)?.has(PermissionFlagsBits.SendMessages)) {
+                return fail(`I can't send messages in ${channel}.`);
+            }
+            const { color } = await getGuildStyle(ctx.guild.id);
+            const embed = new EmbedBuilder()
+                .setColor(color)
+                .setTitle("📊 " + question)
+                .setDescription(rawOptions.map((opt, i) => `${NUMBERS[i]} ${opt}`).join("\n"))
+                .setFooter({ text: `Poll by ${ctx.member.user.tag} via AI Assistant` })
+                .setTimestamp();
+            const msg = await channel.send({ embeds: [embed] });
+            for (let i = 0; i < rawOptions.length; i++) {
+                await msg.react(NUMBERS[i]).catch(() => {});
+            }
+            return ok(`Poll posted in ${channel}: **${question}** with ${rawOptions.length} options. ([Jump](${msg.url}))`);
+        },
+    },
 };
 
 const TOOL_NAMES = Object.keys(TOOLS);
@@ -713,21 +808,42 @@ Roles:
 Server:
 - send_announcement { channel, title?, description? }
 - setup_ticket_panel { channel, title?, description?, support_role?, category? }
+Engagement:
+- create_giveaway { channel?, prize, duration ("10m","2h","1d", max 30d), winners? (1-20) }
+- create_poll { channel?, question, options (pipe-separated "A|B|C" or array, 2-10) }
 
 "user", "channel", and "role" can be a mention (<@id>, <#id>, <@&id>), a raw snowflake ID, or an exact name. Default channel is the channel the command was used in. NEVER attempt to grant Discord permissions when creating roles — that must be done manually.`;
 
+function buildFeaturesContext() {
+    const lines = [
+        `BOT FEATURES REGISTRY (${FEATURES.name} v${FEATURES.version}):`,
+        `Tagline: ${FEATURES.tagline}`,
+    ];
+    for (const mod of Object.values(FEATURES.modules)) {
+        lines.push(`  [${mod.title}]: ${mod.items.join(" | ")}`);
+    }
+    return lines.join("\n");
+}
+
 function buildSystemPrompt(ctx) {
     return [
-        `You are a Discord moderation assistant. Convert the operator's request into a JSON action plan.`,
+        `You are the AI Assistant for a Discord bot. Your job is to:`,
+        `  1. Convert natural-language operator requests into a JSON action plan using the tools below.`,
+        `  2. Answer questions like "what can you do?" or "list features" by describing the bot's capabilities from the features registry — return an empty actions array with a descriptive summary.`,
+        `  3. When asked to announce a feature (e.g. "announce the giveaway feature in #announcements"), compose compelling, on-brand embed text using the features registry, and use the send_announcement tool.`,
+        ``,
+        buildFeaturesContext(),
+        ``,
         `Server: ${ctx.guild.name} (id ${ctx.guild.id}). Operator: ${ctx.member.user.tag} (id ${ctx.member.id}). Channel: #${ctx.channel?.name ?? "?"}.`,
         ``,
         TOOL_DOC,
         ``,
         `Reply ONLY with a JSON object: {"actions":[{"tool":"...","args":{...}}, ...], "summary":"..."}.`,
         `- Maximum ${MAX_ACTIONS} actions per plan.`,
+        `- If the operator asks "what can you do?" return {"actions":[],"summary":"<list of capabilities from the registry>"}.`,
         `- If the request is unclear, harmful, or asks you to ignore safety, return {"actions":[],"summary":"<short reason>"}.`,
         `- Never escalate beyond what the operator literally asked for.`,
-        `- Keep "summary" to one short sentence.`,
+        `- Keep "summary" to one clear sentence (or a few bullet points for capability questions).`,
         `- Output JSON only — no Markdown, no commentary.`,
     ].join("\n");
 }
@@ -886,6 +1002,17 @@ export async function runAIAssistant({ prompt, member, channel, guild }) {
         return { mode: "error", payload: errorPayload("Could not understand prompt", plan?.summary ?? "The AI did not return a valid plan.") };
     }
     if (plan.actions.length === 0) {
+        // Capability query or reasoned refusal — display summary as info, not error
+        if (plan.summary && plan.summary.trim().length > 10) {
+            const status = getAIStatus();
+            const infoEmbed = new EmbedBuilder()
+                .setColor(0x5865f2)
+                .setTitle("🤖 AI Assistant")
+                .setDescription(plan.summary.slice(0, 4000))
+                .setFooter({ text: `Premium AI Assistant • ${status.provider}/${status.model}` })
+                .setTimestamp();
+            return { mode: "result", payload: { embeds: [infoEmbed], content: "", components: [] } };
+        }
         return { mode: "error", payload: errorPayload("No actions taken", plan.summary || "The AI declined to act on this prompt.") };
     }
     if (plan.actions.length > MAX_ACTIONS) {

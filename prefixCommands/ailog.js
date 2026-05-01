@@ -1,13 +1,11 @@
 import { PermissionFlagsBits } from "discord.js";
-import { and, desc, eq } from "drizzle-orm";
-import { db, aiAssistantLogsTable } from "../db/index.js";
 import { hasTier, premiumDeniedEmbed } from "../utils/permissions.js";
-import { buildLogReply } from "../commands/ailog.js";
+import { fetchLogs, buildLogEmbed } from "../commands/ailog.js";
 
 export const command = {
     name: "ailog",
-    usage: "%ailog [limit] [@user]",
-    description: "[Premium] View recent AI Assistant runs (audit log)",
+    usage: "%ailog [limit 1-15] [@user]",
+    description: "[Premium] View recent AI Assistant audit log entries",
     async execute(message, args) {
         if (!message.guild) return void message.reply("❌ This command only works inside a server.");
         if (!message.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
@@ -19,20 +17,23 @@ export const command = {
 
         let limit = 5;
         let userId = null;
+
+        // Parse args: optional number 1-15 and optional user mention
         for (const arg of args) {
             const n = Number.parseInt(arg, 10);
-            if (Number.isFinite(n) && n >= 1 && n <= 15) limit = n;
-            const mention = arg.match(/^<@!?(\d+)>$/);
-            if (mention) userId = mention[1];
+            if (Number.isFinite(n) && n >= 1 && n <= 15) { limit = n; continue; }
+            const id = arg.match(/^<@!?(\d+)>$/) ?? arg.match(/^(\d{17,20})$/);
+            if (id) userId = id[1];
         }
-        if (!userId && message.mentions.users.size > 0) userId = message.mentions.users.first().id;
+        if (!userId && message.mentions.users.size > 0) {
+            userId = message.mentions.users.first().id;
+        }
 
-        const where = userId
-            ? and(eq(aiAssistantLogsTable.guildId, message.guild.id), eq(aiAssistantLogsTable.userId, userId))
-            : eq(aiAssistantLogsTable.guildId, message.guild.id);
-        const rows = await db.select().from(aiAssistantLogsTable).where(where).orderBy(desc(aiAssistantLogsTable.createdAt)).limit(limit);
-
+        const rows = await fetchLogs({ guildId: message.guild.id, userId, limit });
+        if (rows === null) {
+            return void message.reply("❌ The AI audit log table doesn't exist yet. Run `npm run db:push` on your server to create it.");
+        }
         const user = userId ? await message.client.users.fetch(userId).catch(() => null) : null;
-        return void message.reply(buildLogReply(message.guild, rows, user));
+        return void message.reply(buildLogEmbed(rows, user));
     },
 };
