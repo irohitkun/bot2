@@ -2,18 +2,16 @@
  * Moderation log utility.
  *
  * Sends a log embed to the guild's configured mod-log channel (stored in
- * server_customization.log_channel_id).  Silently does nothing if no channel
- * is configured or the bot lacks permission — mod actions should never fail
- * because of a logging error.
+ * server_customization.log_channel_id).  Errors are surfaced to console
+ * so the bot owner can diagnose issues, but never thrown to the caller.
  *
  * Usage:
  *   import { sendModLog, applyFooter } from "../utils/modLog.js";
  *   await sendModLog(guild, embed);
- *
- *   // To also stamp the footer on an embed before replying in-channel:
- *   applyFooter(embed, style);
+ *   await sendModLog(guild, embed, "Event Log");   // custom footer fallback
  */
 
+import { PermissionsBitField } from "discord.js";
 import { getLogChannel, getGuildStyle } from "./guildStyle.js";
 
 /**
@@ -33,12 +31,13 @@ export function applyFooter(embed, style, fallback = "") {
 
 /**
  * Send a log embed to the guild's configured moderation log channel.
- * Never throws — all errors are swallowed to prevent disrupting the action.
+ * Never throws. Errors are logged to console for diagnostics.
  *
  * @param {import("discord.js").Guild} guild
  * @param {import("discord.js").EmbedBuilder} embed
+ * @param {string} [footerFallback]  Footer text if guild has no custom footer set
  */
-export async function sendModLog(guild, embed) {
+export async function sendModLog(guild, embed, footerFallback = "Moderation Log") {
     try {
         const logChannelId = await getLogChannel(guild.id);
         if (!logChannelId) return;
@@ -46,13 +45,33 @@ export async function sendModLog(guild, embed) {
         const channel = guild.channels.cache.get(logChannelId)
             ?? await guild.channels.fetch(logChannelId).catch(() => null);
 
-        if (!channel?.isTextBased()) return;
+        if (!channel) {
+            console.error(`[ModLog] Log channel ${logChannelId} not found in guild ${guild.id} — did it get deleted? Run /logs set to update it.`);
+            return;
+        }
+
+        if (!channel.isTextBased()) {
+            console.error(`[ModLog] Log channel ${logChannelId} in guild ${guild.id} is not a text channel.`);
+            return;
+        }
+
+        const me = guild.members.me ?? await guild.members.fetchMe().catch(() => null);
+        if (me) {
+            const perms = channel.permissionsFor(me);
+            const missing = [];
+            if (!perms?.has(PermissionsBitField.Flags.SendMessages)) missing.push("SendMessages");
+            if (!perms?.has(PermissionsBitField.Flags.EmbedLinks)) missing.push("EmbedLinks");
+            if (missing.length) {
+                console.error(`[ModLog] Bot is missing ${missing.join(", ")} in log channel ${logChannelId} (guild ${guild.id}).`);
+                return;
+            }
+        }
 
         const style = await getGuildStyle(guild.id);
-        applyFooter(embed, style, "Moderation Log");
+        applyFooter(embed, style, footerFallback);
 
         await channel.send({ embeds: [embed] });
-    } catch {
-        // Never let logging break moderation actions
+    } catch (err) {
+        console.error("[ModLog] Unexpected error sending log:", err);
     }
 }
