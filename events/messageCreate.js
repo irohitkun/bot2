@@ -4,7 +4,7 @@ import { resolve, dirname } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { getPrefix, getNoPrefixMode } from "../utils/prefixCache.js";
 import { canUseNoPrefix } from "../utils/noPrefixAccess.js";
-import { db, afkUsersTable, automodSettingsTable } from "../db/index.js";
+import { db, afkUsersTable, automodSettingsTable, stickyMessagesTable } from "../db/index.js";
 import { awardChatXp } from "../utils/community.js";
 import { noPrefixBlockedCommandNames } from "../utils/helpCatalog.js";
 import { getGuildStyle } from "../utils/guildStyle.js";
@@ -67,13 +67,19 @@ export async function execute(message) {
 
     const guildId = message.guild.id;
 
+    // Resolve prefix early — needed for AFK fix and routing
+    const prefix = await getPrefix(guildId);
+    const msgLower = message.content.toLowerCase().trim();
+    const isAfkCommand = msgLower.startsWith(prefix + "afk") || msgLower === "afk";
+
     // ── AFK checks ───────────────────────────────────────────────────────────
     const [afkEntry] = await db
         .select()
         .from(afkUsersTable)
         .where(and(eq(afkUsersTable.userId, message.author.id), eq(afkUsersTable.guildId, guildId)));
 
-    if (afkEntry) {
+    // Only clear AFK if not running %afk to update/re-set it (avoids "welcome back" + "you are now AFK" spam)
+    if (afkEntry && !isAfkCommand) {
         await db
             .delete(afkUsersTable)
             .where(and(eq(afkUsersTable.userId, message.author.id), eq(afkUsersTable.guildId, guildId)));
@@ -200,8 +206,11 @@ export async function execute(message) {
         }
     }
 
+    // ── Sticky message re-post ────────────────────────────────────────────────
+    // Run after automod so deleted messages don't bump the sticky
+    handleSticky(message).catch(() => {});
+
     // ── Prefix / No-prefix routing ────────────────────────────────────────────
-    const prefix = await getPrefix(guildId);
     const noPrefixMode = await getNoPrefixMode(guildId);
     let commandName;
     let args;
@@ -240,6 +249,36 @@ export async function execute(message) {
     } catch (err) {
         console.error(`Error in prefix command ${prefix}${commandName}:`, err);
         await message.reply("❌ An error occurred while running that command.").catch(() => {});
+    }
+}
+
+// ── Sticky message handler ─────────────────────────────────────────────────────
+async function handleSticky(message) {
+    const [sticky] = await db.select().from(stickyMessagesTable)
+        .where(and(
+            eq(stickyMessagesTable.guildId, message.guild.id),
+            eq(stickyMessagesTable.channelId, message.channel.id),
+            eq(stickyMessagesTable.enabled, true),
+        ));
+    if (!sticky) return;
+
+    // Don't re-post if this message IS the sticky (bot's own sticky message)
+    if (message.id === sticky.lastMessageId) return;
+
+    // Delete old sticky message
+    if (sticky.lastMessageId) {
+        await message.channel.messages.delete(sticky.lastMessageId).catch(() => {});
+    }
+
+    // Post new sticky
+    const newMsg = await message.channel.send({ content: `📌 **Sticky:**\n${sticky.content}` }).catch(() => null);
+    if (newMsg) {
+        await db.update(stickyMessagesTable)
+            .set({ lastMessageId: newMsg.id })
+            .where(and(
+                eq(stickyMessagesTable.guildId, message.guild.id),
+                eq(stickyMessagesTable.channelId, message.channel.id),
+            ));
     }
 }
 
