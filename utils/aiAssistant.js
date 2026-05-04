@@ -32,6 +32,7 @@ import { db, warningsTable, aiAssistantLogsTable, ticketSettingsTable, giveaways
 import { sendModLog } from "./modLog.js";
 import { getGuildStyle } from "./guildStyle.js";
 import { scheduleGiveawayEnd } from "./giveawayScheduler.js";
+import { fetchAllMessages } from "./fetchAllMessages.js";
 
 const _require = createRequire(import.meta.url);
 const FEATURES = _require("../config/features.json");
@@ -49,10 +50,13 @@ const DESTRUCTIVE_TOOLS = new Set([
     "ban_member",
     "kick_member",
     "purge_messages",
+    "purge_until",
+    "purge_from",
     "lock_channel",
     "delete_channel",
     "delete_role",
     "send_announcement",
+    "mass_role",
 ]);
 
 const PERM_LABELS = new Map([
@@ -704,6 +708,177 @@ const TOOLS = {
             return ok(`Poll posted in ${channel}: **${question}** with ${rawOptions.length} options. ([Jump](${msg.url}))`);
         },
     },
+
+    // ── Advanced purge ───────────────────────────────────────────────────────
+
+    purge_until: {
+        userPerm: PermissionFlagsBits.ManageMessages,
+        botPerm: PermissionFlagsBits.ManageMessages,
+        describe: (a) => `Purge all messages back to message \`${a.message_id ?? "?"}\`${a.channel ? ` in ${a.channel}` : ""}`,
+        async execute(ctx, args) {
+            const messageId = String(args.message_id ?? "").trim();
+            if (!messageId || !/^\d{15,21}$/.test(messageId)) return fail("`message_id` must be a valid Discord message ID.");
+            const channel = await resolveChannel(ctx.guild, args.channel, ctx.channel);
+            if (!channel?.isTextBased?.()) return fail("Target channel is not text-based.");
+            const twoWeeks = Date.now() - 14 * 24 * 60 * 60 * 1000;
+            let totalDeleted = 0;
+            let lastId = undefined;
+            let reached = false;
+            while (totalDeleted < MAX_PURGE * 2) {
+                const options = { limit: 100 };
+                if (lastId) options.before = lastId;
+                const batch = await channel.messages.fetch(options).catch(() => null);
+                if (!batch || batch.size === 0) break;
+                const toDelete = [];
+                for (const msg of batch.values()) {
+                    if (msg.id === messageId) { reached = true; break; }
+                    if (msg.createdTimestamp > twoWeeks) toDelete.push(msg);
+                }
+                if (toDelete.length > 0) {
+                    const del = await channel.bulkDelete(toDelete, true).catch(() => null);
+                    totalDeleted += del?.size ?? 0;
+                }
+                if (reached || batch.size < 100) break;
+                lastId = batch.last()?.id;
+                if (totalDeleted >= MAX_PURGE * 2) break;
+            }
+            if (totalDeleted === 0) return fail("No eligible messages found (all may be older than 14 days).");
+            return ok(`Purged **${totalDeleted}** message(s) back to message \`${messageId}\` in ${channel}.`);
+        },
+    },
+
+    purge_from: {
+        userPerm: PermissionFlagsBits.ManageMessages,
+        botPerm: PermissionFlagsBits.ManageMessages,
+        describe: (a) => `Purge all messages after message \`${a.message_id ?? "?"}\`${a.channel ? ` in ${a.channel}` : ""}`,
+        async execute(ctx, args) {
+            const messageId = String(args.message_id ?? "").trim();
+            if (!messageId || !/^\d{15,21}$/.test(messageId)) return fail("`message_id` must be a valid Discord message ID.");
+            const channel = await resolveChannel(ctx.guild, args.channel, ctx.channel);
+            if (!channel?.isTextBased?.()) return fail("Target channel is not text-based.");
+            const twoWeeks = Date.now() - 14 * 24 * 60 * 60 * 1000;
+            const batch = await channel.messages.fetch({ limit: 100, after: messageId }).catch(() => null);
+            if (!batch || batch.size === 0) return fail("No messages found after that message ID.");
+            const toDelete = [...batch.values()].filter((m) => m.createdTimestamp > twoWeeks);
+            if (toDelete.length === 0) return fail("No eligible messages within the 14-day window.");
+            const deleted = await channel.bulkDelete(toDelete, true).catch(() => null);
+            return ok(`Purged **${deleted?.size ?? 0}** message(s) from message \`${messageId}\` onwards in ${channel}.`);
+        },
+    },
+
+    // ── Ticket intelligence ──────────────────────────────────────────────────
+
+    summarize_ticket: {
+        userPerm: PermissionFlagsBits.ManageMessages,
+        botPerm: PermissionFlagsBits.ReadMessageHistory,
+        describe: (a) => `Summarize the ticket in ${a.channel ?? "current channel"}`,
+        async execute(ctx, args) {
+            const channel = await resolveChannel(ctx.guild, args.channel, ctx.channel);
+            if (!channel?.isTextBased?.()) return fail("Target channel is not text-based.");
+            const messages = await fetchAllMessages(channel, 500);
+            if (messages.length === 0) return fail("No messages found in this channel.");
+            const transcript = messages
+                .map((m) => `[${m.author.tag}]: ${m.content || "[embed/attachment]"}`)
+                .join("\n")
+                .slice(0, 8000);
+            const summaryResp = await createAIChatCompletion({
+                maxTokens: 500,
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are a Discord support ticket summarizer. Given a conversation, write a concise summary covering: (1) the user's issue, (2) what was discussed or attempted, (3) current status or resolution. Be factual. Plain text, 3-5 sentences max.",
+                    },
+                    { role: "user", content: transcript },
+                ],
+            });
+            const summary = summaryResp.choices?.[0]?.message?.content?.trim() ?? "Could not generate summary.";
+            const { color } = await getGuildStyle(ctx.guild.id);
+            const embed = new EmbedBuilder()
+                .setColor(color)
+                .setTitle("📋 Ticket Summary")
+                .setDescription(summary)
+                .addFields(
+                    { name: "Channel", value: channel.toString(), inline: true },
+                    { name: "Messages Analyzed", value: `${messages.length}`, inline: true },
+                    { name: "Requested By", value: ctx.member.user.tag, inline: true },
+                )
+                .setTimestamp();
+            await channel.send({ embeds: [embed] });
+            return ok(`Ticket summary posted in ${channel}. Analyzed ${messages.length} message(s).`);
+        },
+    },
+
+    // ── Mass role management ─────────────────────────────────────────────────
+
+    mass_role: {
+        userPerm: PermissionFlagsBits.ManageRoles,
+        botPerm: PermissionFlagsBits.ManageRoles,
+        describe: (a) => `${a.action === "remove" ? "Remove" : "Add"} @${a.role ?? "?"} ${a.action === "remove" ? "from" : "to"} all members with @${a.filter_role ?? "?"}`,
+        async execute(ctx, args) {
+            const role = resolveRole(ctx.guild, args.role);
+            if (!role) return fail(`Role \`${args.role ?? "?"}\` not found.`);
+            const botCheck = canBotManageRole(ctx.guild, role);
+            if (!botCheck.ok) return fail(botCheck.reason);
+            const userCheck = canInvokerAssignRole(ctx.member, role);
+            if (!userCheck.ok) return fail(userCheck.reason);
+            if (!args.filter_role) return fail("`filter_role` is required — specify which members to target by their current role.");
+            const filterRole = resolveRole(ctx.guild, args.filter_role);
+            if (!filterRole) return fail(`Filter role \`${args.filter_role}\` not found.`);
+            const action = String(args.action ?? "add").toLowerCase() === "remove" ? "remove" : "add";
+            await ctx.guild.members.fetch().catch(() => {});
+            const targets = ctx.guild.members.cache.filter((m) => m.roles.cache.has(filterRole.id));
+            if (targets.size === 0) return fail(`No members found with @${filterRole.name}.`);
+            if (targets.size > 150) return fail(`Too many targets (${targets.size}). Mass role supports up to 150 members at a time.`);
+            let succeeded = 0;
+            let skipped = 0;
+            let failed = 0;
+            for (const m of targets.values()) {
+                const has = m.roles.cache.has(role.id);
+                if (action === "add" && has) { skipped++; continue; }
+                if (action === "remove" && !has) { skipped++; continue; }
+                try {
+                    if (action === "add") await m.roles.add(role, `Mass role by ${ctx.member.user.tag} (AI)`);
+                    else await m.roles.remove(role, `Mass role removed by ${ctx.member.user.tag} (AI)`);
+                    succeeded++;
+                } catch { failed++; }
+            }
+            return ok(`Mass role done: ${action === "add" ? "Added" : "Removed"} @${role.name} ${action === "add" ? "to" : "from"} **${succeeded}** member(s). Skipped: ${skipped}, Failed: ${failed}.`);
+        },
+    },
+
+    // ── Context intelligence ─────────────────────────────────────────────────
+
+    get_server_stats: {
+        userPerm: null,
+        botPerm: null,
+        describe: () => "Fetch live server member/channel/role counts",
+        async execute(ctx) {
+            const guild = ctx.guild;
+            await guild.members.fetch().catch(() => {});
+            const total = guild.memberCount;
+            const bots = guild.members.cache.filter((m) => m.user.bot).size;
+            const humans = total - bots;
+            const online = guild.members.cache.filter((m) => m.presence?.status !== "offline" && !m.user.bot).size;
+            const channels = guild.channels.cache;
+            const textCount = channels.filter((c) => c.type === ChannelType.GuildText).size;
+            const voiceCount = channels.filter((c) => c.type === ChannelType.GuildVoice).size;
+            const roles = guild.roles.cache.size - 1;
+            const { color } = await getGuildStyle(guild.id);
+            const embed = new EmbedBuilder()
+                .setColor(color)
+                .setTitle(`📊 ${guild.name} — Live Stats`)
+                .addFields(
+                    { name: "Members", value: `${humans} humans · ${bots} bots · ${total} total`, inline: false },
+                    { name: "Online", value: `${online} humans online`, inline: true },
+                    { name: "Channels", value: `${textCount} text · ${voiceCount} voice`, inline: true },
+                    { name: "Roles", value: `${roles}`, inline: true },
+                )
+                .setThumbnail(guild.iconURL())
+                .setTimestamp();
+            await ctx.channel?.send({ embeds: [embed] }).catch(() => {});
+            return ok(`Server stats posted: ${humans} humans, ${online} online, ${textCount} text channels, ${roles} roles.`);
+        },
+    },
 };
 
 const TOOL_NAMES = Object.keys(TOOLS);
@@ -791,6 +966,8 @@ Moderation:
 - untimeout_member { user, reason? }
 - warn_member { user, reason }
 - purge_messages { count (1-100), user?, channel? }
+- purge_until { message_id, channel? } — delete every message back to (not including) a specific message ID
+- purge_from { message_id, channel? } — delete all messages after a specific message ID up to now
 Channels:
 - lock_channel { channel?, reason? }
 - unlock_channel { channel?, reason? }
@@ -805,9 +982,13 @@ Roles:
 - create_role { name, color? (hex), hoist? (bool), mentionable? (bool) }
 - delete_role { role }
 - set_nickname { user, nickname (string or null to reset) }
+- mass_role { role, filter_role, action ("add"|"remove") } — add/remove a role to/from all members who have filter_role (max 150)
 Server:
 - send_announcement { channel, title?, description? }
 - setup_ticket_panel { channel, title?, description?, support_role?, category? }
+- get_server_stats {} — fetch and post live member/channel/role counts
+Tickets:
+- summarize_ticket { channel? } — AI reads all messages in a ticket channel and posts an intelligent summary
 Engagement:
 - create_giveaway { channel?, prize, duration ("10m","2h","1d", max 30d), winners? (1-20) }
 - create_poll { channel?, question, options (pipe-separated "A|B|C" or array, 2-10) }
