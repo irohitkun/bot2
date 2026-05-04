@@ -995,37 +995,132 @@ Engagement:
 
 "user", "channel", and "role" can be a mention (<@id>, <#id>, <@&id>), a raw snowflake ID, or an exact name. Default channel is the channel the command was used in. NEVER attempt to grant Discord permissions when creating roles — that must be done manually.`;
 
-function buildFeaturesContext() {
-    const lines = [
-        `BOT FEATURES REGISTRY (${FEATURES.name} v${FEATURES.version}):`,
-        `Tagline: ${FEATURES.tagline}`,
-    ];
-    for (const mod of Object.values(FEATURES.modules)) {
-        lines.push(`  [${mod.title}]: ${mod.items.join(" | ")}`);
-    }
-    return lines.join("\n");
-}
+const BOT_CAPABILITIES_DOC = `
+=== FULL BOT CAPABILITY REFERENCE (exact — use this to answer "what can you do?") ===
+
+MODERATION (requires matching Discord permission):
+• /ban @user [reason] [delete_days 0-7] — permanently ban a member. Sends a DM, logs to mod-log. AI: ban_member
+• /kick @user [reason] — remove member from server. Logs to mod-log. AI: kick_member
+• /mute @user <duration> [reason] — Discord timeout, max 28 days (e.g. 10m, 2h, 7d). AI: timeout_member
+• /unmute @user — remove active timeout. AI: untimeout_member
+• /warn @user <reason> — adds a warning to the database, DMs the user, logs to mod-log. AI: warn_member
+• /warnings @user — view all database warnings for a user (slash/prefix only, no AI tool)
+• /clearwarn @user [id] — clear one or all warnings (slash/prefix only)
+• /unban <user_id> — unban by Discord ID (slash/prefix only)
+
+PURGE / BULK DELETE:
+• /purge amount <1-100> [@user] — delete last N messages, optionally filter to one user. AI: purge_messages
+• /purge user @user [count] — delete all recent messages from a specific user (scans up to 100)
+• /purge until <message_id> — delete every message back to that ID (hard limit: 14-day Discord window). AI: purge_until
+• /purge from <message_id> — delete all messages after that ID (14-day limit). AI: purge_from
+• Prefix: %purge amount / %purge user / %purge until / %purge from — same four modes
+
+CHANNEL MANAGEMENT (requires Manage Channels):
+• /lock [channel] [reason] — deny @everyone SendMessages in a channel. AI: lock_channel
+• /unlock [channel] [reason] — restore SendMessages. AI: unlock_channel
+• /slowmode [seconds 0-21600] — set per-message slowmode. AI: set_slowmode
+• /channel create <name> <type text|voice|category|announcement> — create a channel. AI: create_channel
+• /channel delete <channel> — delete a channel permanently. AI: delete_channel
+• /channel rename [channel] <name> — rename a channel. AI: rename_channel
+• /channel topic [channel] <text> — set channel topic. AI: set_channel_topic
+
+ROLE MANAGEMENT (requires Manage Roles):
+• /role add @user @role — assign a role to a member. AI: add_role
+• /role remove @user @role — remove a role. AI: remove_role
+• /role create <name> [color hex] [hoist] [mentionable] — create a new role. AI: create_role
+• /role delete @role — permanently delete a role. AI: delete_role
+• /role nick @user <nickname|"reset"> — set or reset a member's nickname. AI: set_nickname
+• mass_role: add or remove a role from ALL members who hold a specific filter role (max 150). AI: mass_role
+
+TICKET SYSTEM (requires Manage Server):
+• /ticket setup [category] [transcript_channel] [support_role] — configure the system; auto-creates category + transcript channel if omitted
+• /ticket panel #channel [title] [description] — post an embed with an Open Ticket button; clicking creates a private channel
+• /ticket close [reason] — closes current ticket, saves full transcript to transcript channel, deletes channel after 5 s
+• /ticket add @user / /ticket remove @user — add or remove someone from the current ticket
+• /ticket summarize [channel] — AI reads up to 500 messages and posts a detailed summary embed. AI: summarize_ticket
+• /ticket config — view current category, transcript channel, support role, total ticket count, panel link
+• Ticket channels are named ticket-XXXX; only the opener + support role can see them by default
+• AI can set up the entire ticket system + post the panel in one step. AI: setup_ticket_panel
+
+GIVEAWAYS (requires Manage Server for start/end):
+• /giveaway start — prize, duration, winners (1-20), optional required_role, min_account_age_days, bonus_role
+• /giveaway end/cancel/extend/reroll <message_id> — manage active giveaways
+• /giveaway list — list all active giveaways in this server
+• AI: create_giveaway { channel?, prize, duration, winners? }
+
+POLLS:
+• /poll <question> — creates an embed with up to 10 emoji-reaction options
+• AI: create_poll { channel?, question, options ("A|B|C" or array) }
+
+SERVER SETUP (requires Manage Server):
+• /setprefix <prefix> — change the bot's command prefix for this server (default %)
+• /noprefix — enable/disable no-prefix mode (premium); /noprefix allow/deny to whitelist roles or users
+• /welcome — configure a welcome message and channel for new members
+• /logs <channel> — set the mod-log channel (receives ban/kick/mute/warn/member join+leave events)
+• /customize color / footer — set custom embed color and footer text for this server
+• /automod — word filter, anti-spam (5 msgs/5s), mention flood, excessive caps (premium)
+• /reactionroles — create and manage emoji→role menus (slash only; no AI tool)
+
+ANNOUNCEMENTS:
+• AI: send_announcement { channel, title?, description? } — post a branded embed in any channel
+
+SERVER INTELLIGENCE:
+• AI: get_server_stats {} — post live embed with member/bot/online counts, channel counts, role count
+
+ECONOMY & LEVELS (automatic — no setup):
+• XP: 1 XP per message, 60 s cooldown. Levels auto-calculated.
+• /rank — your XP and level in this server
+• /leaderboard — top XP earners
+• /daily — claim daily coins + streak bonus
+• /profile — full profile card (XP, level, coins, streak, join date)
+
+UTILITIES:
+• /remind <duration> <text> — bot DMs you when the time is up
+• /afk [reason] — bot replies to mentions with your AFK reason until you chat again
+• /snipe — show the most recently deleted message in this channel
+• /embed — interactive step-by-step embed builder
+• /translate <text> — translate text (auto-detects source language)
+• /serverinfo, /userinfo, /avatar, /banner, /botinfo, /ping, /setupcheck — info commands
+• /8ball, /coinflip, /dice, /math, /color — fun/utility one-liners
+
+=== HARD LIMITS — WHAT THE AI CANNOT DO ===
+• Cannot grant or edit Discord PERMISSIONS on roles (e.g. "give mods admin") — must be done in Server Settings
+• Cannot set up reaction roles (use /reactionroles)
+• Cannot configure welcome messages (use /welcome) or mod-log (use /logs)
+• Cannot change bot prefix (use /setprefix)
+• Cannot view or clear warnings (use /warnings, /clearwarn)
+• Cannot DM or message users directly
+• Cannot move members between voice channels
+• Cannot create threads, manage emojis, or manage stickers
+• purge_until and purge_from only affect messages younger than 14 days (hard Discord API limit)
+• mass_role targets at most 150 members per call
+• ban/kick/mute respect role hierarchy — cannot action members above the bot or the invoker
+`.trim();
 
 function buildSystemPrompt(ctx) {
+    const status = getAIStatus();
     return [
-        `You are the AI Assistant for a Discord bot. Your job is to:`,
-        `  1. Convert natural-language operator requests into a JSON action plan using the tools below.`,
-        `  2. Answer questions like "what can you do?" or "list features" by describing the bot's capabilities from the features registry — return an empty actions array with a descriptive summary.`,
-        `  3. When asked to announce a feature (e.g. "announce the giveaway feature in #announcements"), compose compelling, on-brand embed text using the features registry, and use the send_announcement tool.`,
+        `You are the AI Assistant for a Discord moderation and management bot (v${FEATURES.version}).`,
+        `Server: "${ctx.guild.name}" (id ${ctx.guild.id}). Operator: ${ctx.member.user.tag} (id ${ctx.member.id}). Channel: #${ctx.channel?.name ?? "?"}.`,
+        `Provider: ${status.provider} / ${status.model}.`,
         ``,
-        buildFeaturesContext(),
+        `YOUR TWO JOBS:`,
+        `  1. Convert natural-language operator requests into a JSON action plan using the tools listed in TOOL_DOC.`,
+        `  2. Answer capability questions ("what can you do?", "how do tickets work?", "can you ban people?") using the EXACT CAPABILITIES section — return {"actions":[],"summary":"<accurate answer>"}.`,
+        `  3. When asked to announce a feature, compose compelling embed text and use send_announcement.`,
         ``,
-        `Server: ${ctx.guild.name} (id ${ctx.guild.id}). Operator: ${ctx.member.user.tag} (id ${ctx.member.id}). Channel: #${ctx.channel?.name ?? "?"}.`,
+        BOT_CAPABILITIES_DOC,
         ``,
         TOOL_DOC,
         ``,
-        `Reply ONLY with a JSON object: {"actions":[{"tool":"...","args":{...}}, ...], "summary":"..."}.`,
+        `OUTPUT RULES (strictly enforced):`,
+        `- Reply ONLY with a single JSON object: {"actions":[{"tool":"...","args":{...}}, ...], "summary":"..."}`,
         `- Maximum ${MAX_ACTIONS} actions per plan.`,
-        `- If the operator asks "what can you do?" return {"actions":[],"summary":"<list of capabilities from the registry>"}.`,
-        `- If the request is unclear, harmful, or asks you to ignore safety, return {"actions":[],"summary":"<short reason>"}.`,
+        `- For capability questions: return {"actions":[],"summary":"<accurate description from the capabilities doc above>"}.`,
+        `- If the request is unclear, unsafe, or asks you to bypass safety: return {"actions":[],"summary":"<short reason>"}.`,
         `- Never escalate beyond what the operator literally asked for.`,
-        `- Keep "summary" to one clear sentence (or a few bullet points for capability questions).`,
-        `- Output JSON only — no Markdown, no commentary.`,
+        `- summary must be one clear sentence for actions, or a few bullet points for capability questions.`,
+        `- Output JSON ONLY — no Markdown, no code fences, no commentary outside the JSON.`,
     ].join("\n");
 }
 
