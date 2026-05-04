@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from "discord.js";
-import { sendModLog } from "../utils/modLog.js";
+import { sendModLog, applyFooter } from "../utils/modLog.js";
+import { getGuildStyle } from "../utils/guildStyle.js";
 
 export const data = new SlashCommandBuilder()
     .setName("lock")
@@ -13,8 +14,18 @@ export async function execute(interaction) {
     const reason = interaction.options.getString("reason") ?? "Channel locked by moderator";
     const guild = interaction.guild;
 
-    await targetChannel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false });
+    const me = guild.members.me;
+    if (!targetChannel.permissionsFor(me)?.has(PermissionFlagsBits.ManageChannels)) {
+        return interaction.reply({ content: "❌ I don't have permission to manage that channel.", flags: 64 });
+    }
 
+    try {
+        await targetChannel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false }, { reason });
+    } catch (err) {
+        return interaction.reply({ content: `❌ Failed to lock the channel: ${err.message}`, flags: 64 });
+    }
+
+    const style = await getGuildStyle(guild.id);
     const embed = new EmbedBuilder()
         .setColor(0xed4245)
         .setTitle("🔒 Channel Locked")
@@ -24,7 +35,7 @@ export async function execute(interaction) {
             { name: "Reason", value: reason },
         )
         .setTimestamp();
-
+    applyFooter(embed, style);
     await interaction.reply({ embeds: [embed] });
 
     await sendModLog(guild, new EmbedBuilder()
