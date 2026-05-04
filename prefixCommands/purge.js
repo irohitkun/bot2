@@ -1,39 +1,141 @@
 import { EmbedBuilder, PermissionFlagsBits } from "discord.js";
 import { parseMention } from "./index.js";
+
+const TWO_WEEKS = 14 * 24 * 60 * 60 * 1000;
+
 export const command = {
     name: "purge",
-    usage: "%purge <1-100> [@user]",
-    description: "Bulk delete messages",
+    usage: [
+        "%purge <1-100> [@user]         — delete last N messages",
+        "%purge user <@user> [amount]   — delete a user's recent messages",
+        "%purge until <message_id>      — delete back to a message ID",
+        "%purge from <message_id>       — delete messages after a message ID",
+    ].join("\n"),
+    description: "Bulk delete messages (4 modes: amount, user, until, from)",
     async execute(message, args) {
         if (!message.member?.permissions.has(PermissionFlagsBits.ManageMessages)) {
-            return void message.reply("❌ You don't have permission to manage messages.");
+            return void message.reply("❌ You need the **Manage Messages** permission.");
         }
-        if (!args[0])
-            return void message.reply(`Usage: \`${this.usage}\``);
-        const amount = parseInt(args[0], 10);
+
+        const sub = args[0]?.toLowerCase();
+
+        // ── purge user <@user> [amount] ─────────────────────────────────────
+        if (sub === "user") {
+            const rawUser = args[1];
+            if (!rawUser) return void message.reply("Usage: `%purge user <@user> [amount]`");
+            const userId = parseMention(rawUser) ?? rawUser;
+            const amount = parseInt(args[2] ?? "100", 10);
+            if (isNaN(amount) || amount < 1 || amount > 100) {
+                return void message.reply("❌ Amount must be between 1 and 100.");
+            }
+            await message.delete().catch(() => {});
+            const channel = message.channel;
+            const fetched = await channel.messages.fetch({ limit: amount });
+            const toDelete = [...fetched.values()].filter(
+                (m) => m.author.id === userId && m.createdTimestamp > Date.now() - TWO_WEEKS
+            );
+            if (toDelete.length === 0) {
+                const warn = await channel.send("❌ No recent eligible messages from that user.");
+                setTimeout(() => warn.delete().catch(() => {}), 4000);
+                return;
+            }
+            const deleted = await channel.bulkDelete(toDelete, true);
+            return void sendResult(channel, deleted.size, `User filter applied`);
+        }
+
+        // ── purge until <message_id> ────────────────────────────────────────
+        if (sub === "until") {
+            const messageId = args[1];
+            if (!messageId || !/^\d{15,21}$/.test(messageId)) {
+                return void message.reply("❌ Provide a valid message ID. Usage: `%purge until <message_id>`");
+            }
+            await message.delete().catch(() => {});
+            const channel = message.channel;
+            let totalDeleted = 0;
+            let lastId;
+            let reached = false;
+
+            while (totalDeleted < 500) {
+                const opts = { limit: 100 };
+                if (lastId) opts.before = lastId;
+                const batch = await channel.messages.fetch(opts).catch(() => null);
+                if (!batch || batch.size === 0) break;
+
+                const toDelete = [];
+                for (const msg of batch.values()) {
+                    if (msg.id === messageId) { reached = true; break; }
+                    if (msg.createdTimestamp > Date.now() - TWO_WEEKS) toDelete.push(msg);
+                }
+                if (toDelete.length > 0) {
+                    const del = await channel.bulkDelete(toDelete, true).catch(() => null);
+                    totalDeleted += del?.size ?? 0;
+                }
+                if (reached || batch.size < 100) break;
+                lastId = batch.last()?.id;
+            }
+
+            if (totalDeleted === 0) {
+                const warn = await channel.send("❌ No eligible messages found (14-day limit or ID not found).");
+                setTimeout(() => warn.delete().catch(() => {}), 5000);
+                return;
+            }
+            return void sendResult(channel, totalDeleted, `Until \`${messageId}\``);
+        }
+
+        // ── purge from <message_id> ─────────────────────────────────────────
+        if (sub === "from") {
+            const messageId = args[1];
+            if (!messageId || !/^\d{15,21}$/.test(messageId)) {
+                return void message.reply("❌ Provide a valid message ID. Usage: `%purge from <message_id>`");
+            }
+            await message.delete().catch(() => {});
+            const channel = message.channel;
+            const batch = await channel.messages.fetch({ limit: 100, after: messageId }).catch(() => null);
+            if (!batch || batch.size === 0) {
+                const warn = await channel.send("❌ No messages found after that message ID.");
+                setTimeout(() => warn.delete().catch(() => {}), 4000);
+                return;
+            }
+            const toDelete = [...batch.values()].filter((m) => m.createdTimestamp > Date.now() - TWO_WEEKS);
+            if (toDelete.length === 0) {
+                const warn = await channel.send("❌ No eligible messages within the 14-day window.");
+                setTimeout(() => warn.delete().catch(() => {}), 4000);
+                return;
+            }
+            const deleted = await channel.bulkDelete(toDelete, true);
+            return void sendResult(channel, deleted.size, `From \`${messageId}\``);
+        }
+
+        // ── purge <amount> [@user] — default ───────────────────────────────
+        const amount = parseInt(sub ?? "", 10);
         if (isNaN(amount) || amount < 1 || amount > 100) {
-            return void message.reply("❌ Please provide a number between 1 and 100.");
+            return void message.reply(
+                `❌ Invalid usage. Options:\n\`\`\`\n${this.usage}\n\`\`\``
+            );
         }
         const filterUserId = args[1] ? (parseMention(args[1]) ?? args[1]) : null;
+        await message.delete().catch(() => {});
         const channel = message.channel;
-        await message.delete().catch(() => { });
         const fetched = await channel.messages.fetch({ limit: amount });
-        let toDelete = [...fetched.values()];
-        if (filterUserId) {
-            toDelete = toDelete.filter((m) => m.author.id === filterUserId);
-        }
-        const twoWeeksAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
-        toDelete = toDelete.filter((m) => m.createdTimestamp > twoWeeksAgo);
+        let toDelete = [...fetched.values()].filter((m) => m.createdTimestamp > Date.now() - TWO_WEEKS);
+        if (filterUserId) toDelete = toDelete.filter((m) => m.author.id === filterUserId);
         if (toDelete.length === 0) {
-            return void channel.send("❌ No eligible messages found to delete.").then((m) => setTimeout(() => m.delete().catch(() => { }), 4000));
+            const warn = await channel.send("❌ No eligible messages found to delete.");
+            setTimeout(() => warn.delete().catch(() => {}), 4000);
+            return;
         }
         const deleted = await channel.bulkDelete(toDelete, true);
-        const embed = new EmbedBuilder()
-            .setColor(0x5865f2)
-            .setTitle("🗑️ Messages Purged")
-            .addFields({ name: "Deleted", value: `${deleted.size} message(s)`, inline: true }, { name: "Moderator", value: message.author.tag, inline: true })
-            .setTimestamp();
-        const reply = await channel.send({ embeds: [embed] });
-        setTimeout(() => reply.delete().catch(() => { }), 5000);
+        return void sendResult(channel, deleted.size, filterUserId ? `User filter applied` : null);
     },
 };
+
+async function sendResult(channel, count, detail) {
+    const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle("🗑️ Messages Purged")
+        .addFields({ name: "Deleted", value: `${count} message(s)`, inline: true })
+        .setTimestamp();
+    if (detail) embed.addFields({ name: "Filter", value: detail, inline: true });
+    const reply = await channel.send({ embeds: [embed] });
+    setTimeout(() => reply.delete().catch(() => {}), 5000);
+}
