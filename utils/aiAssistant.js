@@ -28,11 +28,13 @@ import { randomBytes } from "crypto";
 import { createRequire } from "module";
 import { and, count, eq } from "drizzle-orm";
 import { createAIChatCompletion, getAIStatus, getAssistantModel } from "./aiProvider.js";
-import { db, warningsTable, aiAssistantLogsTable, ticketSettingsTable, giveawaysTable } from "../db/index.js";
+import { db, warningsTable, aiAssistantLogsTable, ticketSettingsTable, giveawaysTable, tempBansTable } from "../db/index.js";
 import { sendModLog } from "./modLog.js";
 import { getGuildStyle } from "./guildStyle.js";
 import { scheduleGiveawayEnd } from "./giveawayScheduler.js";
 import { fetchAllMessages } from "./fetchAllMessages.js";
+import { parseDuration, formatDuration } from "./parseDuration.js";
+import { scheduleUnban } from "./tempBanScheduler.js";
 
 const _require = createRequire(import.meta.url);
 const FEATURES = _require("../config/features.json");
@@ -48,6 +50,7 @@ const PLAN_TTL_MS = 5 * 60 * 1000;  // pending plans expire after 5 minutes
 
 const DESTRUCTIVE_TOOLS = new Set([
     "ban_member",
+    "tempban_member",
     "kick_member",
     "purge_messages",
     "purge_until",
@@ -195,6 +198,41 @@ const TOOLS = {
                 { name: "Messages Deleted", value: `${deleteDays} day(s)`, inline: true },
             ]));
             return ok(`Banned **${target.user.tag}** — ${reason}`);
+        },
+    },
+
+    tempban_member: {
+        userPerm: PermissionFlagsBits.BanMembers,
+        botPerm: PermissionFlagsBits.BanMembers,
+        describe: (a) => `Temp-ban **${a.user ?? "?"}** for **${a.duration ?? "?"}**${a.reason ? ` — ${a.reason}` : ""}`,
+        async execute(ctx, args) {
+            const target = await resolveMember(ctx.guild, args.user);
+            if (!target) return fail(`Member \`${args.user ?? "?"}\` not found.`);
+            const hier = canInvokerTarget(ctx.member, target);
+            if (!hier.ok) return fail(hier.reason);
+            if (!target.bannable) return fail(`I can't ban ${target.user.tag} (role hierarchy).`);
+            const ms = parseDuration(String(args.duration ?? ""));
+            if (!ms || ms < 60_000) return fail("Invalid duration. Examples: 1h, 12h, 7d, 2w. Minimum: 1 minute.");
+            if (ms > 365 * 24 * 60 * 60 * 1000) return fail("Maximum temp ban duration is 1 year.");
+            const reason = String(args.reason ?? "AI Assistant action").slice(0, 480);
+            const label = formatDuration(ms);
+            const unbanAt = new Date(Date.now() + ms);
+            await target.ban({ reason: `[TempBan: ${label}] ${reason} • via ${ctx.member.user.tag} (AI)` });
+            const [row] = await db.insert(tempBansTable).values({
+                guildId: ctx.guild.id,
+                userId: target.user.id,
+                userTag: target.user.tag,
+                moderatorId: ctx.member.user.id,
+                moderatorTag: ctx.member.user.tag,
+                reason,
+                unbanAt,
+            }).returning();
+            scheduleUnban(ctx.guild.client, row, ms);
+            await sendModLog(ctx.guild, modEmbed(0xf1c40f, "⏰ Temp Ban Issued (AI)", target, ctx.member, reason, [
+                { name: "Duration", value: label, inline: true },
+                { name: "Expires", value: `<t:${Math.floor(unbanAt.getTime() / 1000)}:F>`, inline: true },
+            ]));
+            return ok(`Temp-banned **${target.user.tag}** for **${label}** — ${reason}`);
         },
     },
 
@@ -961,6 +999,7 @@ export function peekPendingPlan(token) {
 const TOOL_DOC = `Available tools (use exactly these names):
 Moderation:
 - ban_member { user, reason?, delete_days? (0-7) }
+- tempban_member { user, duration ("1h","12h","7d","2w" etc), reason? } — ban then auto-unban after duration
 - kick_member { user, reason? }
 - timeout_member { user, duration ("10m","1h","2d", max 28d), reason? }
 - untimeout_member { user, reason? }
