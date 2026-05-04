@@ -4,6 +4,16 @@ import { createServer, get as httpGet } from "http";
 import { loadCommands } from "./utils/loadCommands.js";
 import { loadEvents } from "./utils/loadEvents.js";
 
+// ── Global crash protection ───────────────────────────────────────────────────
+// Prevents any single unhandled rejection or exception from killing the process.
+process.on("unhandledRejection", (reason) => {
+    console.error("[Process] Unhandled promise rejection:", reason);
+});
+
+process.on("uncaughtException", (err) => {
+    console.error("[Process] Uncaught exception:", err);
+});
+
 export const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -13,7 +23,6 @@ export const client = new Client({
         GatewayIntentBits.GuildMembers,
         ...(process.env.MESSAGE_CONTENT_INTENT_ENABLED === "true" ? [GatewayIntentBits.MessageContent] : []),
     ],
-    // Partials are required to receive reactions on messages sent before the bot started
     partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
 
@@ -31,17 +40,47 @@ function startKeepAliveServer() {
         }
     });
 
-    server.listen(port, () => {
+    server.on("error", (err) => {
+        console.warn("[Keep-alive] Server error:", err.message);
+    });
+
+    server.listen(port, "0.0.0.0", () => {
         console.log(`Keep-alive server running on port ${port}`);
     });
 
+    // Self-ping every 4 minutes to prevent host from sleeping the process
     setInterval(() => {
-        const req = httpGet(`http://localhost:${port}/ping`, (res) => {
+        const req = httpGet(`http://127.0.0.1:${port}/ping`, (res) => {
             console.log(`[Keep-alive] Self-ping OK — status ${res.statusCode}`);
         });
         req.on("error", (err) => console.warn("[Keep-alive] Self-ping failed:", err.message));
-    }, 5 * 60 * 1000);
+        req.setTimeout(10000, () => {
+            req.destroy();
+            console.warn("[Keep-alive] Self-ping timed out");
+        });
+    }, 4 * 60 * 1000);
 }
+
+// ── Discord client error handling ─────────────────────────────────────────────
+client.on("error", (err) => {
+    console.error("[Discord] Client error:", err.message);
+});
+
+client.on("warn", (info) => {
+    console.warn("[Discord] Warning:", info);
+});
+
+client.on("shardDisconnect", (event, id) => {
+    console.warn(`[Discord] Shard ${id} disconnected — code ${event.code}. Will auto-reconnect.`);
+});
+
+client.on("shardReconnecting", (id) => {
+    console.log(`[Discord] Shard ${id} reconnecting...`);
+});
+
+client.on("shardResume", (id, replayed) => {
+    console.log(`[Discord] Shard ${id} resumed — replayed ${replayed} events.`);
+});
 
 async function main() {
     startKeepAliveServer();

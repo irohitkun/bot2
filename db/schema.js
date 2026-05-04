@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean, integer, primaryKey, uniqueIndex, } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, integer, primaryKey, } from "drizzle-orm/pg-core";
 
 export const guildSettingsTable = pgTable("guild_settings", {
     guildId: text("guild_id").primaryKey(),
@@ -36,7 +36,6 @@ export const premiumGuildsTable = pgTable("premium_guilds", {
     notes: text("notes"),
     isTrial: boolean("is_trial").notNull().default(false),
     reminderSent: boolean("reminder_sent").notNull().default(false),
-    // UID to DM when subscription is expiring / expired (defaults to guild owner if null)
     notifyUserId: text("notify_user_id"),
 });
 
@@ -64,12 +63,8 @@ export const giveawaysTable = pgTable("giveaways", {
     ended: boolean("ended").notNull().default(false),
     cancelled: boolean("cancelled").notNull().default(false),
     winners: text("winners").notNull().default(""),
-    // Eligibility: optional role required to enter, optional minimum
-    // account age (in days) measured from Discord account creation.
     requiredRoleId: text("required_role_id"),
     minAccountAgeDays: integer("min_account_age_days"),
-    // Bonus entries: a comma-separated list of role IDs whose holders get
-    // (1 + bonusEntries) total entries instead of 1.
     bonusRoleIds: text("bonus_role_ids").notNull().default(""),
     bonusEntries: integer("bonus_entries").notNull().default(0),
 });
@@ -115,8 +110,6 @@ export const remindersTable = pgTable("reminders", {
     sent: boolean("sent").notNull().default(false),
 });
 
-// ── Ticket System ────────────────────────────────────────────────────────────
-
 export const ticketSettingsTable = pgTable("ticket_settings", {
     guildId: text("guild_id").primaryKey(),
     categoryId: text("category_id"),
@@ -144,11 +137,6 @@ export const ticketsTable = pgTable("tickets", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// ── AI Assistant Audit Log ───────────────────────────────────────────────────
-// Records every premium AI Assistant invocation: prompt, planned actions, outcomes,
-// and resolution status. Used by /ailog and %ailog to give server admins a full
-// audit trail of natural-language commands.
-
 export const aiAssistantLogsTable = pgTable("ai_assistant_logs", {
     id: serial("id").primaryKey(),
     guildId: text("guild_id").notNull(),
@@ -157,18 +145,19 @@ export const aiAssistantLogsTable = pgTable("ai_assistant_logs", {
     channelId: text("channel_id").notNull(),
     prompt: text("prompt").notNull(),
     planSummary: text("plan_summary"),
-    actionsJson: text("actions_json").notNull(),   // JSON.stringify of the planned tool calls
-    resultsJson: text("results_json").notNull(),   // JSON.stringify of [{tool, ok, summary}]
+    actionsJson: text("actions_json").notNull(),
+    resultsJson: text("results_json").notNull(),
     succeeded: integer("succeeded").notNull().default(0),
     failed: integer("failed").notNull().default(0),
-    status: text("status").notNull().default("executed"), // executed | cancelled | expired | error
+    status: text("status").notNull().default("executed"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 // ── Reaction Roles ───────────────────────────────────────────────────────────
+// NOTE: uses composite PK (message_id, emoji) — no serial id column,
+// matching the actual database table that was created without one.
 
 export const reactionRolesTable = pgTable("reaction_roles", {
-    id: serial("id").primaryKey(),
     guildId: text("guild_id").notNull(),
     channelId: text("channel_id").notNull(),
     messageId: text("message_id").notNull(),
@@ -176,4 +165,4 @@ export const reactionRolesTable = pgTable("reaction_roles", {
     roleId: text("role_id").notNull(),
     createdBy: text("created_by").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
-}, (t) => [uniqueIndex("reaction_roles_message_emoji_unique").on(t.messageId, t.emoji)]);
+}, (t) => [primaryKey({ columns: [t.messageId, t.emoji] })]);

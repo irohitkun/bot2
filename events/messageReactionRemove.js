@@ -23,11 +23,17 @@ export async function execute(reaction, user) {
         ? `<${reaction.emoji.animated ? "a" : ""}:${reaction.emoji.name}:${reaction.emoji.id}>`
         : reaction.emoji.name;
 
-    const [row] = await db.select().from(reactionRolesTable)
-        .where(and(
-            eq(reactionRolesTable.messageId, reaction.message.id),
-            eq(reactionRolesTable.emoji, emoji),
-        ));
+    let row;
+    try {
+        [row] = await db.select().from(reactionRolesTable)
+            .where(and(
+                eq(reactionRolesTable.messageId, reaction.message.id),
+                eq(reactionRolesTable.emoji, emoji),
+            ));
+    } catch (err) {
+        console.warn("[ReactionRoles] DB error on reactionRemove lookup:", err.message);
+        return;
+    }
 
     if (!row) return;
 

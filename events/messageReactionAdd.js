@@ -9,7 +9,6 @@ export const once = false;
 export async function execute(reaction, user) {
     if (user.bot) return;
 
-    // Handle partial reactions (reactions on messages sent before bot started)
     if (reaction.partial) {
         try { await reaction.fetch(); } catch { return; }
     }
@@ -20,16 +19,21 @@ export async function execute(reaction, user) {
     const guild = reaction.message.guild;
     if (!guild) return;
 
-    // Normalize emoji: custom emojis have format <:name:id> or <a:name:id>
     const emoji = reaction.emoji.id
         ? `<${reaction.emoji.animated ? "a" : ""}:${reaction.emoji.name}:${reaction.emoji.id}>`
         : reaction.emoji.name;
 
-    const [row] = await db.select().from(reactionRolesTable)
-        .where(and(
-            eq(reactionRolesTable.messageId, reaction.message.id),
-            eq(reactionRolesTable.emoji, emoji),
-        ));
+    let row;
+    try {
+        [row] = await db.select().from(reactionRolesTable)
+            .where(and(
+                eq(reactionRolesTable.messageId, reaction.message.id),
+                eq(reactionRolesTable.emoji, emoji),
+            ));
+    } catch (err) {
+        console.warn("[ReactionRoles] DB error on reactionAdd lookup:", err.message);
+        return;
+    }
 
     if (!row) return;
 
