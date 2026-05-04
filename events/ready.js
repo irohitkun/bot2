@@ -209,21 +209,3 @@ async function pollReminders(client) {
         console.error("[Reminders] Poll error:", err);
     }
 }
-
-export default {
-  name: 'ready',
-  once: true,
-  async execute(client) {
-    console.log(`Logged in as ${client.user.tag}`);
-
-    client.user.setPresence({
-      status: 'dnd',
-      activities: [
-        {
-          name: 'over your server 🛡️',
-          type: 3
-        }
-      ]
-    });
-  }
-};
