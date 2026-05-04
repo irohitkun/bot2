@@ -1,6 +1,6 @@
 import { Events, ActivityType, EmbedBuilder } from "discord.js";
 import { registerSlashCommands } from "../utils/registerCommands.js";
-import { db, premiumGuildsTable, giveawaysTable, remindersTable } from "../db/index.js";
+import { db, premiumGuildsTable, giveawaysTable, remindersTable, scheduledMessagesTable } from "../db/index.js";
 import { eq, and, lte, isNotNull, lt } from "drizzle-orm";
 import { invalidatePremiumCache, normalizeTier } from "../utils/permissions.js";
 import { scheduleGiveawayEnd } from "../utils/giveawayScheduler.js";
@@ -28,6 +28,7 @@ export async function execute(client) {
     await recoverActiveGiveaways(client);
     await recoverTempBans(client);
     startReminderPoller(client);
+    startScheduledMessagePoller(client);
 }
 
 // ── Premium expiration reminders ─────────────────────────────────────────────
@@ -164,6 +165,37 @@ async function recoverActiveGiveaways(client) {
         }
     } catch (err) {
         console.error("[Giveaways] Recovery error:", err);
+    }
+}
+
+// ── Scheduled message poller ──────────────────────────────────────────────────
+
+function startScheduledMessagePoller(client) {
+    pollScheduledMessages(client);
+    setInterval(() => pollScheduledMessages(client), 60 * 1000);
+}
+
+async function pollScheduledMessages(client) {
+    try {
+        const now = new Date();
+        const due = await db
+            .select()
+            .from(scheduledMessagesTable)
+            .where(and(eq(scheduledMessagesTable.sent, false), lte(scheduledMessagesTable.sendAt, now)));
+
+        for (const msg of due) {
+            try {
+                const channel = await client.channels.fetch(msg.channelId).catch(() => null);
+                if (channel?.isTextBased()) {
+                    await channel.send(msg.content).catch(() => {});
+                }
+            } catch (err) {
+                console.warn(`[ScheduledMsg] Could not send message #${msg.id}:`, err.message);
+            }
+            await db.update(scheduledMessagesTable).set({ sent: true }).where(eq(scheduledMessagesTable.id, msg.id));
+        }
+    } catch (err) {
+        console.error("[ScheduledMsg] Poll error:", err);
     }
 }
 
