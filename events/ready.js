@@ -4,6 +4,7 @@ import { db, premiumGuildsTable, giveawaysTable, remindersTable } from "../db/in
 import { eq, and, lte, isNotNull, lt } from "drizzle-orm";
 import { invalidatePremiumCache, normalizeTier } from "../utils/permissions.js";
 import { scheduleGiveawayEnd } from "../utils/giveawayScheduler.js";
+import { recoverTempBans } from "../utils/tempBanScheduler.js";
 
 const TIER_ICONS = { free: "🔓", premium: "⭐" };
 
@@ -25,6 +26,7 @@ export async function execute(client) {
 
     startExpirationReminders(client);
     await recoverActiveGiveaways(client);
+    await recoverTempBans(client);
     startReminderPoller(client);
 }
 
