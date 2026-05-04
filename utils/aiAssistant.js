@@ -130,21 +130,6 @@ function resolveRole(guild, value) {
     return guild.roles.cache.find((r) => r.name.toLowerCase() === lower) ?? null;
 }
 
-function parseDuration(input) {
-    if (input == null) return null;
-    const str = String(input).trim().toLowerCase();
-    const match = str.match(/^(\d+)\s*(s|sec|secs|m|min|mins|h|hr|hrs|d|day|days)?$/);
-    if (!match) return null;
-    const value = parseInt(match[1], 10);
-    if (!Number.isFinite(value) || value <= 0) return null;
-    const unit = match[2] ?? "m";
-    const seconds =
-        unit.startsWith("s") ? value :
-        unit.startsWith("h") ? value * 3600 :
-        unit.startsWith("d") ? value * 86400 :
-        value * 60; // default minutes
-    return seconds * 1000;
-}
 
 // ── Hierarchy helpers ───────────────────────────────────────────────────────
 
