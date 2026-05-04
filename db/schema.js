@@ -166,3 +166,33 @@ export const reactionRolesTable = pgTable("reaction_roles", {
     createdBy: text("created_by").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.messageId, t.emoji] })]);
+
+// ── Temporary Bans ────────────────────────────────────────────────────────────
+// Auto-unban scheduler reads this on startup to recover pending unbans.
+
+export const tempBansTable = pgTable("temp_bans", {
+    id: serial("id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    userId: text("user_id").notNull(),
+    userTag: text("user_tag").notNull(),
+    moderatorId: text("moderator_id").notNull(),
+    moderatorTag: text("moderator_tag").notNull(),
+    reason: text("reason").notNull().default("No reason provided"),
+    bannedAt: timestamp("banned_at").notNull().defaultNow(),
+    unbanAt: timestamp("unban_at").notNull(),
+    unbanned: boolean("unbanned").notNull().default(false),
+    unbannedAt: timestamp("unbanned_at"),
+});
+
+// ── Member Notes ──────────────────────────────────────────────────────────────
+// Staff-only notes attached to members — never visible to the member themselves.
+
+export const memberNotesTable = pgTable("member_notes", {
+    id: serial("id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    userId: text("user_id").notNull(),
+    authorId: text("author_id").notNull(),
+    authorTag: text("author_tag").notNull(),
+    note: text("note").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
