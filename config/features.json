@@ -1,8 +1,9 @@
 {
   "name": "Bot",
   "tagline": "Fast, modular server management bot with premium AI features",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "changelog": [
+    "v2.3.0 — AI upgraded: purge_until, purge_from, summarize_ticket, mass_role, get_server_stats. Multi-key AI fallback (GROQ_API_KEY_2/3). Precise system prompt replacing vague registry dump. /purge expanded: amount/user/until/from subcommands. /ticket summarize added.",
     "v2.2.0 — AI tools expanded: create/delete/rename channels, create/delete roles, setup ticket panels, send announcements, create giveaways, create polls. Features registry added. /features command added.",
     "v2.1.0 — AI Assistant audit log (ai_assistant_logs table). /ailog and %ailog commands for admins.",
     "v2.0.0 — Premium AI Assistant (/ai, %ai, no-prefix ai). 12 initial tools: ban, kick, timeout, untimeout, warn, purge, lock, unlock, slowmode, add/remove role, set nickname. Approval flow for destructive actions.",
@@ -12,13 +13,24 @@
     "moderation": {
       "title": "Moderation",
       "items": [
-        "Ban members with optional message deletion (1-7 days)",
-        "Kick members from the server",
-        "Timeout members (up to 28 days) and remove timeouts",
-        "Warn members — warnings persist in database, DM is sent",
-        "View and clear warnings per user (/warnings, /clearwarn)",
-        "Purge up to 100 messages, optionally filtered by user",
-        "Unban members by user ID"
+        "Ban members with optional message deletion (1-7 days) — DMs user, logs to mod-log",
+        "Kick members — logs to mod-log",
+        "Timeout (mute) members up to 28 days — supports 10m, 2h, 7d formats",
+        "Remove timeouts",
+        "Warn members — warnings persist in database, DM is sent, logged to mod-log",
+        "View all warnings per user (/warnings, %warnings)",
+        "Clear one or all warnings (/clearwarn, %clearwarn)",
+        "Unban members by user ID (/unban, %unban)"
+      ]
+    },
+    "purge": {
+      "title": "Purge / Bulk Delete",
+      "items": [
+        "/purge amount <1-100> [@user] — delete last N messages, optional user filter",
+        "/purge user @user [count] — delete a specific user's recent messages",
+        "/purge until <message_id> — delete all messages back to a message ID (14-day limit)",
+        "/purge from <message_id> — delete all messages after a message ID (14-day limit)",
+        "All four modes available as prefix commands too (%purge)"
       ]
     },
     "channel_management": {
@@ -26,7 +38,7 @@
       "items": [
         "Lock channels (deny @everyone SendMessages)",
         "Unlock channels",
-        "Set slowmode (0 to 6 hours per message)",
+        "Set slowmode 0 to 6 hours per message",
         "Create text, voice, category, or announcement channels",
         "Delete channels",
         "Rename channels",
@@ -38,7 +50,8 @@
       "items": [
         "Create roles (name, color, hoist, mentionable)",
         "Delete roles",
-        "Add and remove roles from members",
+        "Add and remove roles from individual members",
+        "mass_role: add/remove a role from all members with a given filter role (up to 150)",
         "Set or reset member nicknames",
         "Reaction roles — members self-assign roles by reacting to messages"
       ]
@@ -46,12 +59,14 @@
     "tickets": {
       "title": "Ticket System",
       "items": [
-        "Full ticket system setup — auto-creates category and transcript channel if not configured",
+        "Full ticket setup — auto-creates category and transcript channel if not configured",
         "Post ticket panel with Open Ticket button in any channel",
-        "Each ticket gets a private channel visible only to the user and support role",
-        "Ticket transcripts auto-saved to a transcript channel on close",
+        "Each ticket creates a private channel visible only to the opener and support role",
+        "Full message transcripts auto-saved to transcript channel on close",
         "Add or remove users from active tickets",
-        "View ticket system config (/ticket config)"
+        "/ticket summarize — AI reads up to 500 messages and posts an intelligent summary",
+        "View ticket system config (/ticket config)",
+        "AI can set up the full ticket system and post the panel in a single natural-language command"
       ]
     },
     "giveaways": {
@@ -114,18 +129,20 @@
         "No-prefix access control — restrict no-prefix to specific roles/users",
         "Custom embed color and footer text for server branding",
         "Welcome messages — configured channel and custom message",
-        "Mod log channel — all ban/kick/mute/warn events sent automatically"
+        "Mod log channel — all ban/kick/mute/warn/member events sent automatically"
       ]
     },
     "ai_assistant": {
       "title": "AI Assistant (Premium)",
       "items": [
-        "Natural-language commands — describe what to do and the bot does it",
-        "20 tools: moderation, channel lifecycle, role lifecycle, ticket setup, announcements, giveaways, polls",
-        "Approve/Cancel preview for destructive actions (ban, kick, purge, delete, lock, announce)",
+        "Natural-language commands — describe what to do and the bot executes it",
+        "27 tools: ban, kick, timeout, warn, purge (4 modes), lock/unlock, slowmode, channel CRUD, role CRUD, set nickname, mass role, send announcement, setup ticket panel, summarize ticket, create giveaway, create poll, get server stats",
+        "Approve/Cancel confirmation flow for all destructive actions (ban, kick, purge, delete, lock, announce, mass_role)",
         "All runs recorded to an audit log — query with /ailog",
         "Works via /ai, %ai, or no-prefix 'ai ...'",
-        "Powered by Groq (llama-3.3-70b-versatile) or OpenAI — configurable via AI_ASSISTANT_MODEL env var"
+        "Multi-key fallback — supports GROQ_API_KEY, GROQ_API_KEY_2, GROQ_API_KEY_3 (rotates automatically on credit exhaustion)",
+        "Powered by Groq (llama-3.3-70b-versatile) or OpenAI — configurable via AI_ASSISTANT_MODEL env var",
+        "Precise system prompt with exact command docs, limits, and explicit cannot-do list"
       ]
     }
   }
