@@ -10,7 +10,7 @@ export const helpCategories = [
             ["/warn", "Warn a member"],
             ["/warnings", "View member warnings"],
             ["/clearwarn", "Clear warnings"],
-            ["/purge", "Bulk delete messages"],
+            ["/purge", "Bulk delete messages (amount / user / until / from)"],
             ["/lock", "Lock a channel"],
             ["/unlock", "Unlock a channel"],
             ["/slowmode", "Set channel slowmode"],
@@ -73,7 +73,7 @@ export const helpCategories = [
         key: "premium",
         label: "Premium",
         commands: [
-            ["/ai", "AI Assistant — describe an action and the bot performs it (22 tools)"],
+            ["/ai", "AI Assistant — describe an action and the bot performs it (27 tools)"],
             ["/ailog", "View recent AI Assistant audit log entries"],
             ["/features", "Browse everything this bot can do"],
             ["/perks", "View this server's plan and enabled features"],
