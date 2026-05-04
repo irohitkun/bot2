@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean, integer, primaryKey, } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, integer, primaryKey, unique } from "drizzle-orm/pg-core";
 
 export const guildSettingsTable = pgTable("guild_settings", {
     guildId: text("guild_id").primaryKey(),
@@ -194,5 +194,49 @@ export const memberNotesTable = pgTable("member_notes", {
     authorId: text("author_id").notNull(),
     authorTag: text("author_tag").notNull(),
     note: text("note").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ── Tags ──────────────────────────────────────────────────────────────────────
+// Staff-triggered canned responses. Different from autoresponders (keyword-based).
+// Staff run /tag <name> or %tag <name> — bot posts the saved content.
+
+export const tagsTable = pgTable("tags", {
+    id: serial("id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    name: text("name").notNull(),
+    content: text("content").notNull(),
+    createdBy: text("created_by").notNull(),
+    createdByTag: text("created_by_tag").notNull(),
+    uses: integer("uses").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [unique("tags_guild_name_unique").on(t.guildId, t.name)]);
+
+// ── Sticky Messages ───────────────────────────────────────────────────────────
+// A message that re-posts itself at the bottom of a channel after each new message.
+
+export const stickyMessagesTable = pgTable("sticky_messages", {
+    guildId: text("guild_id").notNull(),
+    channelId: text("channel_id").notNull(),
+    content: text("content").notNull(),
+    lastMessageId: text("last_message_id"),
+    enabled: boolean("enabled").notNull().default(true),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.guildId, t.channelId] })]);
+
+// ── Scheduled Messages ────────────────────────────────────────────────────────
+// Messages queued to be sent to a channel at a specific future time.
+
+export const scheduledMessagesTable = pgTable("scheduled_messages", {
+    id: serial("id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    channelId: text("channel_id").notNull(),
+    content: text("content").notNull(),
+    sendAt: timestamp("send_at").notNull(),
+    sent: boolean("sent").notNull().default(false),
+    createdBy: text("created_by").notNull(),
+    createdByTag: text("created_by_tag").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
