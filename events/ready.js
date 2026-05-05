@@ -1,7 +1,8 @@
 import { Events, ActivityType, EmbedBuilder } from "discord.js";
 import { registerSlashCommands } from "../utils/registerCommands.js";
-import { db, premiumGuildsTable, giveawaysTable, remindersTable, scheduledMessagesTable } from "../db/index.js";
+import { db, premiumGuildsTable, giveawaysTable, remindersTable, scheduledMessagesTable, birthdaysTable, birthdaySettingsTable, j2cTempChannelsTable } from "../db/index.js";
 import { eq, and, lte, isNotNull, lt } from "drizzle-orm";
+import { cleanupOrphanedJ2CChannels } from "./voiceStateUpdate.js";
 import { invalidatePremiumCache, normalizeTier } from "../utils/permissions.js";
 import { scheduleGiveawayEnd } from "../utils/giveawayScheduler.js";
 import { recoverTempBans } from "../utils/tempBanScheduler.js";
@@ -29,6 +30,8 @@ export async function execute(client) {
     await recoverTempBans(client);
     startReminderPoller(client);
     startScheduledMessagePoller(client);
+    await cleanupOrphanedJ2CChannels(client);
+    startBirthdayPoller(client);
 }
 
 // ── Premium expiration reminders ─────────────────────────────────────────────
@@ -196,6 +199,63 @@ async function pollScheduledMessages(client) {
         }
     } catch (err) {
         console.error("[ScheduledMsg] Poll error:", err);
+    }
+}
+
+// ── Birthday poller ───────────────────────────────────────────────────────────
+
+const birthdayAnnouncedToday = new Set(); // in-memory: "guildId:userId:month:day"
+
+function startBirthdayPoller(client) {
+    pollBirthdays(client);
+    // Check every hour — resets naturally when bot restarts daily
+    setInterval(() => pollBirthdays(client), 60 * 60 * 1000);
+}
+
+async function pollBirthdays(client) {
+    try {
+        const now = new Date();
+        const month = now.getUTCMonth() + 1;
+        const day = now.getUTCDate();
+
+        // Get all birthdays for today across all guilds
+        const todays = await db.select().from(birthdaysTable)
+            .where(and(eq(birthdaysTable.month, month), eq(birthdaysTable.day, day)));
+
+        for (const bday of todays) {
+            const key = `${bday.guildId}:${bday.userId}:${month}:${day}`;
+            if (birthdayAnnouncedToday.has(key)) continue;
+
+            const [settings] = await db.select().from(birthdaySettingsTable)
+                .where(and(eq(birthdaySettingsTable.guildId, bday.guildId), eq(birthdaySettingsTable.enabled, true)));
+            if (!settings?.channelId) continue;
+
+            const guild = client.guilds.cache.get(bday.guildId);
+            if (!guild) continue;
+
+            const member = await guild.members.fetch(bday.userId).catch(() => null);
+            if (!member) continue;
+
+            const channel = guild.channels.cache.get(settings.channelId)
+                ?? await guild.channels.fetch(settings.channelId).catch(() => null);
+            if (!channel?.isTextBased()) continue;
+
+            const content = settings.message.replace(/\{user\}/gi, member.toString());
+            await channel.send({ content }).catch(() => {});
+
+            // Give birthday role for the day if configured
+            if (settings.roleId) {
+                await member.roles.add(settings.roleId, "Birthday role").catch(() => {});
+                // Remove after 24 hours
+                setTimeout(async () => {
+                    await member.roles.remove(settings.roleId, "Birthday role expired").catch(() => {});
+                }, 24 * 60 * 60 * 1000);
+            }
+
+            birthdayAnnouncedToday.add(key);
+        }
+    } catch (err) {
+        console.error("[Birthdays] Poll error:", err);
     }
 }
 
