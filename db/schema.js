@@ -304,3 +304,17 @@ export const birthdaySettingsTable = pgTable("birthday_settings", {
     message: text("message").notNull().default("🎂 Happy Birthday, {user}! 🎉"),
     enabled: boolean("enabled").notNull().default(true),
 });
+
+// ── Custom Commands ───────────────────────────────────────────────────────────
+// Server-specific commands created by staff. Premium-only.
+// Triggered via prefix (e.g. %commandname) alongside all built-in commands.
+
+export const customCommandsTable = pgTable("custom_commands", {
+    id: serial("id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    name: text("name").notNull(),
+    response: text("response").notNull(),
+    createdBy: text("created_by").notNull(),
+    uses: integer("uses").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [unique("custom_cmds_guild_name_unique").on(t.guildId, t.name)]);
