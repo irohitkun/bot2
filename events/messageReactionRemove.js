@@ -43,10 +43,19 @@ export async function execute(reaction, user) {
         }
     }
 
-    // ── Starboard — update star count on the existing entry ───────────────────
+    // ── Starboard — update count when a star is removed ───────────────────────
     await handleStarboardUpdate(reaction, guild, emoji).catch((e) =>
         console.warn("[Starboard] Remove update error:", e.message)
     );
+}
+
+function getStarRating(count, threshold) {
+    const ratio = count / Math.max(threshold, 1);
+    if (ratio >= 10) return { label: "⭐⭐⭐⭐⭐", color: 0xff4500 };
+    if (ratio >= 5)  return { label: "⭐⭐⭐⭐",   color: 0xff7700 };
+    if (ratio >= 3)  return { label: "⭐⭐⭐",     color: 0xff9900 };
+    if (ratio >= 2)  return { label: "⭐⭐",       color: 0xffbb00 };
+    return                   { label: "⭐",         color: 0xffd700 };
 }
 
 async function handleStarboardUpdate(reaction, guild, emoji) {
@@ -59,19 +68,17 @@ async function handleStarboardUpdate(reaction, guild, emoji) {
     if (!existing) return;
 
     const starCount = reaction.count ?? 0;
-    await db.update(starboardEntriesTable)
-        .set({ starCount })
-        .where(eq(starboardEntriesTable.messageId, reaction.message.id));
+    await db.update(starboardEntriesTable).set({ starCount }).where(eq(starboardEntriesTable.messageId, reaction.message.id));
 
-    // Update the displayed count in the starboard post
     if (existing.starboardMessageId) {
         const starboardChannel = guild.channels.cache.get(settings.channelId)
             ?? await guild.channels.fetch(settings.channelId).catch(() => null);
         if (!starboardChannel?.isTextBased()) return;
         const sbMsg = await starboardChannel.messages.fetch(existing.starboardMessageId).catch(() => null);
         if (sbMsg) {
+            const { label } = getStarRating(starCount, settings.threshold);
             await sbMsg.edit({
-                content: `${settings.emoji} **${starCount}** | <#${reaction.message.channelId}>`,
+                content: `${settings.emoji} **${starCount}** ${label} | <#${reaction.message.channelId}>`,
             }).catch(() => {});
         }
     }
