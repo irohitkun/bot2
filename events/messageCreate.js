@@ -4,7 +4,7 @@ import { resolve, dirname } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { getPrefix, getNoPrefixMode } from "../utils/prefixCache.js";
 import { canUseNoPrefix } from "../utils/noPrefixAccess.js";
-import { db, afkUsersTable, automodSettingsTable, stickyMessagesTable } from "../db/index.js";
+import { db, afkUsersTable, automodSettingsTable, stickyMessagesTable, customCommandsTable } from "../db/index.js";
 import { awardChatXp } from "../utils/community.js";
 import { noPrefixBlockedCommandNames } from "../utils/helpCatalog.js";
 import { getGuildStyle } from "../utils/guildStyle.js";
@@ -242,13 +242,33 @@ export async function execute(message) {
 
     if (!commandName) return;
     const command = prefixCommands.get(commandName);
-    if (!command) return;
 
+    if (command) {
+        try {
+            await command.execute(message, args);
+        } catch (err) {
+            console.error(`Error in prefix command ${prefix}${commandName}:`, err);
+            await message.reply("❌ An error occurred while running that command.").catch(() => {});
+        }
+        return;
+    }
+
+    // ── Custom commands fallback (premium) ────────────────────────────────────
+    // If no built-in command matched, check this guild's custom commands
     try {
-        await command.execute(message, args);
-    } catch (err) {
-        console.error(`Error in prefix command ${prefix}${commandName}:`, err);
-        await message.reply("❌ An error occurred while running that command.").catch(() => {});
+        const { sql: drizzleSql } = await import("drizzle-orm");
+        const [custom] = await db.select().from(customCommandsTable)
+            .where(and(eq(customCommandsTable.guildId, guildId), eq(customCommandsTable.name, commandName)));
+        if (custom) {
+            await message.channel.send(custom.response).catch(() => {});
+            // Increment use count (fire-and-forget)
+            db.update(customCommandsTable)
+                .set({ uses: drizzleSql`${customCommandsTable.uses} + 1` })
+                .where(eq(customCommandsTable.id, custom.id))
+                .catch(() => {});
+        }
+    } catch {
+        // Custom command lookup never blocks the user
     }
 }
 
