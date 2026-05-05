@@ -37,8 +37,9 @@ export const helpCategories = [
             ["/setprefix", "Change prefix command prefix"],
             ["/noprefix", "Manage premium no-prefix access"],
             ["/j2c", "⭐ Join-to-Create voice channels — users get instant private VCs"],
-            ["/starboard", "⭐ Hall-of-fame channel for starred messages"],
+            ["/starboard", "⭐ Hall-of-fame channel for starred messages (with 1–5 star quality rating)"],
             ["/birthday", "Birthday system with daily announcements (announcements = ⭐ premium)"],
+            ["/customcmd", "⭐ Create server-specific commands unique to your server"],
         ],
     },
     {
@@ -108,6 +109,7 @@ export const prefixCommandNames = new Set([
     "kick",
     "leaderboard",
     "birthday",
+    "customcmd",
     "j2c",
     "lock",
     "lockdown",
