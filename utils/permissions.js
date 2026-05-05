@@ -132,6 +132,9 @@ export function isBotOwner(userId) {
     return owners.includes(userId);
 }
 
+/** Alias for isPremiumGuild — used throughout commands */
+export const isPremium = (guildId) => isPremiumGuild(guildId);
+
 export async function isPremiumGuild(guildId) {
     const cached = premiumCache.get(guildId);
     if (cached) {
