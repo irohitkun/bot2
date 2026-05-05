@@ -1,6 +1,5 @@
 import { Events } from "discord.js";
-import { db } from "../db/index.js";
-import { reactionRolesTable } from "../db/schema.js";
+import { db, reactionRolesTable, starboardSettingsTable, starboardEntriesTable } from "../db/index.js";
 import { and, eq } from "drizzle-orm";
 
 export const name = Events.MessageReactionRemove;
@@ -23,6 +22,7 @@ export async function execute(reaction, user) {
         ? `<${reaction.emoji.animated ? "a" : ""}:${reaction.emoji.name}:${reaction.emoji.id}>`
         : reaction.emoji.name;
 
+    // ── Reaction Roles ────────────────────────────────────────────────────────
     let row;
     try {
         [row] = await db.select().from(reactionRolesTable)
@@ -32,15 +32,47 @@ export async function execute(reaction, user) {
             ));
     } catch (err) {
         console.warn("[ReactionRoles] DB error on reactionRemove lookup:", err.message);
-        return;
     }
 
-    if (!row) return;
+    if (row) {
+        try {
+            const member = await guild.members.fetch(user.id);
+            await member.roles.remove(row.roleId, "Reaction role removed");
+        } catch (err) {
+            console.warn(`[ReactionRoles] Failed to remove role ${row.roleId} from ${user.id}:`, err.message);
+        }
+    }
 
-    try {
-        const member = await guild.members.fetch(user.id);
-        await member.roles.remove(row.roleId, "Reaction role removed");
-    } catch (err) {
-        console.warn(`[ReactionRoles] Failed to remove role ${row.roleId} from ${user.id}:`, err.message);
+    // ── Starboard — update star count on the existing entry ───────────────────
+    await handleStarboardUpdate(reaction, guild, emoji).catch((e) =>
+        console.warn("[Starboard] Remove update error:", e.message)
+    );
+}
+
+async function handleStarboardUpdate(reaction, guild, emoji) {
+    const [settings] = await db.select().from(starboardSettingsTable)
+        .where(and(eq(starboardSettingsTable.guildId, guild.id), eq(starboardSettingsTable.enabled, true)));
+    if (!settings || emoji !== settings.emoji) return;
+
+    const [existing] = await db.select().from(starboardEntriesTable)
+        .where(eq(starboardEntriesTable.messageId, reaction.message.id));
+    if (!existing) return;
+
+    const starCount = reaction.count ?? 0;
+    await db.update(starboardEntriesTable)
+        .set({ starCount })
+        .where(eq(starboardEntriesTable.messageId, reaction.message.id));
+
+    // Update the displayed count in the starboard post
+    if (existing.starboardMessageId) {
+        const starboardChannel = guild.channels.cache.get(settings.channelId)
+            ?? await guild.channels.fetch(settings.channelId).catch(() => null);
+        if (!starboardChannel?.isTextBased()) return;
+        const sbMsg = await starboardChannel.messages.fetch(existing.starboardMessageId).catch(() => null);
+        if (sbMsg) {
+            await sbMsg.edit({
+                content: `${settings.emoji} **${starCount}** | <#${reaction.message.channelId}>`,
+            }).catch(() => {});
+        }
     }
 }
