@@ -54,16 +54,12 @@ async function handleStarboard(reaction, guild, emoji) {
         .where(and(eq(starboardSettingsTable.guildId, guild.id), eq(starboardSettingsTable.enabled, true)));
     if (!settings) return;
 
-    // Only care about the configured emoji
     if (emoji !== settings.emoji) return;
-
-    // Don't star messages in the starboard channel itself
     if (reaction.message.channelId === settings.channelId) return;
 
     const starCount = reaction.count ?? 0;
     const msg = reaction.message;
 
-    // Check if this message is already in the starboard
     const [existing] = await db.select().from(starboardEntriesTable)
         .where(eq(starboardEntriesTable.messageId, msg.id));
 
@@ -71,26 +67,26 @@ async function handleStarboard(reaction, guild, emoji) {
         ?? await guild.channels.fetch(settings.channelId).catch(() => null);
     if (!starboardChannel?.isTextBased()) return;
 
-    const embed = buildStarboardEmbed(msg, starCount, settings.emoji);
+    const embed = buildStarboardEmbed(msg, starCount, settings);
 
     if (existing) {
-        // Update existing starboard post's star count
         if (existing.starboardMessageId) {
             const sbMsg = await starboardChannel.messages.fetch(existing.starboardMessageId).catch(() => null);
-            if (sbMsg) await sbMsg.edit({ embeds: [embed] }).catch(() => {});
+            if (sbMsg) {
+                await sbMsg.edit({
+                    content: buildStarboardHeader(starCount, settings, msg.channelId),
+                    embeds: [embed],
+                }).catch(() => {});
+            }
         }
-        await db.update(starboardEntriesTable)
-            .set({ starCount })
-            .where(eq(starboardEntriesTable.messageId, msg.id));
+        await db.update(starboardEntriesTable).set({ starCount }).where(eq(starboardEntriesTable.messageId, msg.id));
         return;
     }
 
-    // Not yet on the starboard — check if threshold reached
     if (starCount < settings.threshold) return;
 
-    // Post to starboard
     const sbMsg = await starboardChannel.send({
-        content: `${settings.emoji} **${starCount}** | <#${msg.channelId}>`,
+        content: buildStarboardHeader(starCount, settings, msg.channelId),
         embeds: [embed],
     }).catch(() => null);
 
@@ -104,22 +100,43 @@ async function handleStarboard(reaction, guild, emoji) {
     });
 }
 
-function buildStarboardEmbed(msg, starCount, emoji) {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function getStarRating(count, threshold) {
+    const ratio = count / Math.max(threshold, 1);
+    if (ratio >= 10) return { stars: 5, label: "⭐⭐⭐⭐⭐", color: 0xff4500 }; // Legendary
+    if (ratio >= 5)  return { stars: 4, label: "⭐⭐⭐⭐",   color: 0xff7700 }; // Excellent
+    if (ratio >= 3)  return { stars: 3, label: "⭐⭐⭐",     color: 0xff9900 }; // Great
+    if (ratio >= 2)  return { stars: 2, label: "⭐⭐",       color: 0xffbb00 }; // Good
+    return                   { stars: 1, label: "⭐",         color: 0xffd700 }; // Notable
+}
+
+function buildStarboardHeader(starCount, settings, channelId) {
+    const { label } = getStarRating(starCount, settings.threshold);
+    return `${settings.emoji} **${starCount}** ${label} | <#${channelId}>`;
+}
+
+function buildStarboardEmbed(msg, starCount, settings) {
+    const { color, label } = getStarRating(starCount, settings.threshold);
+
     const embed = new EmbedBuilder()
-        .setColor(0xfee75c)
+        .setColor(color)
         .setAuthor({
             name: msg.author?.tag ?? "Unknown",
             iconURL: msg.author?.displayAvatarURL() ?? undefined,
         })
         .setTimestamp(msg.createdAt)
-        .setFooter({ text: `${emoji} ${starCount} · ${msg.id}` });
+        .setFooter({ text: `Quality: ${label} · ${starCount} ${settings.emoji} · ID: ${msg.id}` });
 
     if (msg.content) embed.setDescription(msg.content.slice(0, 4096));
 
-    const image = msg.attachments.find((a) => a.contentType?.startsWith("image/"))
-        ?? msg.embeds.find((e) => e.image)?.image;
-    if (image?.url) embed.setImage(image.url);
+    // Attach first image if any
+    const attachment = msg.attachments.find((a) => a.contentType?.startsWith("image/"));
+    const embedImage = msg.embeds.find((e) => e.image)?.image;
+    if (attachment?.url) embed.setImage(attachment.url);
+    else if (embedImage?.url) embed.setImage(embedImage.url);
 
-    embed.addFields({ name: "Jump to message", value: `[Click here](${msg.url})` });
+    embed.addFields({ name: "📎 Source", value: `[Jump to message](${msg.url}) in <#${msg.channelId}>`, inline: false });
+
     return embed;
 }
