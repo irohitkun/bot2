@@ -240,3 +240,67 @@ export const scheduledMessagesTable = pgTable("scheduled_messages", {
     createdByTag: text("created_by_tag").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// ── Join-to-Create (J2C) ──────────────────────────────────────────────────────
+// Hub voice channels — joining creates a personal temp VC (premium).
+
+export const j2cHubsTable = pgTable("j2c_hubs", {
+    id: serial("id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    channelId: text("channel_id").notNull(),
+    categoryId: text("category_id"),
+    nameTemplate: text("name_template").notNull().default("{user}'s Channel"),
+    userLimit: integer("user_limit").notNull().default(0),
+    bitrate: integer("bitrate").notNull().default(64),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [unique("j2c_hubs_channel_unique").on(t.channelId)]);
+
+// Active temporary voice channels created by J2C hubs.
+export const j2cTempChannelsTable = pgTable("j2c_temp_channels", {
+    channelId: text("channel_id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    hubId: text("hub_id").notNull(),
+    ownerId: text("owner_id").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ── Starboard ─────────────────────────────────────────────────────────────────
+// Hall-of-fame: messages with enough reactions get posted to a starboard channel (premium).
+
+export const starboardSettingsTable = pgTable("starboard_settings", {
+    guildId: text("guild_id").primaryKey(),
+    channelId: text("channel_id").notNull(),
+    threshold: integer("threshold").notNull().default(3),
+    emoji: text("emoji").notNull().default("⭐"),
+    enabled: boolean("enabled").notNull().default(true),
+});
+
+export const starboardEntriesTable = pgTable("starboard_entries", {
+    messageId: text("message_id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    channelId: text("channel_id").notNull(),
+    authorId: text("author_id").notNull(),
+    starboardMessageId: text("starboard_message_id"),
+    starCount: integer("star_count").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ── Birthdays ─────────────────────────────────────────────────────────────────
+// Members register their birthday; bot announces it on the day (announcement = premium).
+
+export const birthdaysTable = pgTable("birthdays", {
+    userId: text("user_id").notNull(),
+    guildId: text("guild_id").notNull(),
+    month: integer("month").notNull(),
+    day: integer("day").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.guildId] })]);
+
+export const birthdaySettingsTable = pgTable("birthday_settings", {
+    guildId: text("guild_id").primaryKey(),
+    channelId: text("channel_id"),
+    roleId: text("role_id"),
+    message: text("message").notNull().default("🎂 Happy Birthday, {user}! 🎉"),
+    enabled: boolean("enabled").notNull().default(true),
+});
