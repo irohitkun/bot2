@@ -47,6 +47,10 @@ export const automodSettingsTable = pgTable("automod_settings", {
     maxCapsPercent: integer("max_caps_percent").notNull().default(70),
     logChannelId: text("log_channel_id"),
     antiSpamEnabled: boolean("anti_spam_enabled").notNull().default(false),
+    blockLinks: boolean("block_links").notNull().default(false),
+    blockInvites: boolean("block_invites").notNull().default(false),
+    regexPatterns: text("regex_patterns").notNull().default(""),
+    bypassChannels: text("bypass_channels").notNull().default(""),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -153,10 +157,6 @@ export const aiAssistantLogsTable = pgTable("ai_assistant_logs", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// ── Reaction Roles ───────────────────────────────────────────────────────────
-// NOTE: uses composite PK (message_id, emoji) — no serial id column,
-// matching the actual database table that was created without one.
-
 export const reactionRolesTable = pgTable("reaction_roles", {
     guildId: text("guild_id").notNull(),
     channelId: text("channel_id").notNull(),
@@ -166,9 +166,6 @@ export const reactionRolesTable = pgTable("reaction_roles", {
     createdBy: text("created_by").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.messageId, t.emoji] })]);
-
-// ── Temporary Bans ────────────────────────────────────────────────────────────
-// Auto-unban scheduler reads this on startup to recover pending unbans.
 
 export const tempBansTable = pgTable("temp_bans", {
     id: serial("id").primaryKey(),
@@ -184,9 +181,6 @@ export const tempBansTable = pgTable("temp_bans", {
     unbannedAt: timestamp("unbanned_at"),
 });
 
-// ── Member Notes ──────────────────────────────────────────────────────────────
-// Staff-only notes attached to members — never visible to the member themselves.
-
 export const memberNotesTable = pgTable("member_notes", {
     id: serial("id").primaryKey(),
     guildId: text("guild_id").notNull(),
@@ -196,10 +190,6 @@ export const memberNotesTable = pgTable("member_notes", {
     note: text("note").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
-
-// ── Tags ──────────────────────────────────────────────────────────────────────
-// Staff-triggered canned responses. Different from autoresponders (keyword-based).
-// Staff run /tag <name> or %tag <name> — bot posts the saved content.
 
 export const tagsTable = pgTable("tags", {
     id: serial("id").primaryKey(),
@@ -213,9 +203,6 @@ export const tagsTable = pgTable("tags", {
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [unique("tags_guild_name_unique").on(t.guildId, t.name)]);
 
-// ── Sticky Messages ───────────────────────────────────────────────────────────
-// A message that re-posts itself at the bottom of a channel after each new message.
-
 export const stickyMessagesTable = pgTable("sticky_messages", {
     guildId: text("guild_id").notNull(),
     channelId: text("channel_id").notNull(),
@@ -225,9 +212,6 @@ export const stickyMessagesTable = pgTable("sticky_messages", {
     createdBy: text("created_by").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.guildId, t.channelId] })]);
-
-// ── Scheduled Messages ────────────────────────────────────────────────────────
-// Messages queued to be sent to a channel at a specific future time.
 
 export const scheduledMessagesTable = pgTable("scheduled_messages", {
     id: serial("id").primaryKey(),
@@ -241,9 +225,6 @@ export const scheduledMessagesTable = pgTable("scheduled_messages", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// ── Join-to-Create (J2C) ──────────────────────────────────────────────────────
-// Hub voice channels — joining creates a personal temp VC (premium).
-
 export const j2cHubsTable = pgTable("j2c_hubs", {
     id: serial("id").primaryKey(),
     guildId: text("guild_id").notNull(),
@@ -256,7 +237,6 @@ export const j2cHubsTable = pgTable("j2c_hubs", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [unique("j2c_hubs_channel_unique").on(t.channelId)]);
 
-// Active temporary voice channels created by J2C hubs.
 export const j2cTempChannelsTable = pgTable("j2c_temp_channels", {
     channelId: text("channel_id").primaryKey(),
     guildId: text("guild_id").notNull(),
@@ -264,9 +244,6 @@ export const j2cTempChannelsTable = pgTable("j2c_temp_channels", {
     ownerId: text("owner_id").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
-
-// ── Starboard ─────────────────────────────────────────────────────────────────
-// Hall-of-fame: messages with enough reactions get posted to a starboard channel (premium).
 
 export const starboardSettingsTable = pgTable("starboard_settings", {
     guildId: text("guild_id").primaryKey(),
@@ -286,9 +263,6 @@ export const starboardEntriesTable = pgTable("starboard_entries", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// ── Birthdays ─────────────────────────────────────────────────────────────────
-// Members register their birthday; bot announces it on the day (announcement = premium).
-
 export const birthdaysTable = pgTable("birthdays", {
     userId: text("user_id").notNull(),
     guildId: text("guild_id").notNull(),
@@ -305,10 +279,6 @@ export const birthdaySettingsTable = pgTable("birthday_settings", {
     enabled: boolean("enabled").notNull().default(true),
 });
 
-// ── Custom Commands ───────────────────────────────────────────────────────────
-// Server-specific commands created by staff. Premium-only.
-// Triggered via prefix (e.g. %commandname) alongside all built-in commands.
-
 export const customCommandsTable = pgTable("custom_commands", {
     id: serial("id").primaryKey(),
     guildId: text("guild_id").notNull(),
@@ -318,3 +288,61 @@ export const customCommandsTable = pgTable("custom_commands", {
     uses: integer("uses").notNull().default(0),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [unique("custom_cmds_guild_name_unique").on(t.guildId, t.name)]);
+
+// ── Verification ──────────────────────────────────────────────────────────────
+export const verificationSettingsTable = pgTable("verification_settings", {
+    guildId: text("guild_id").primaryKey(),
+    enabled: boolean("enabled").notNull().default(false),
+    channelId: text("channel_id"),
+    roleId: text("role_id"),
+    message: text("message").notNull().default("Click the button below to verify yourself and gain access to the server."),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// ── AntiNuke ──────────────────────────────────────────────────────────────────
+export const antinukeSettingsTable = pgTable("antinuke_settings", {
+    guildId: text("guild_id").primaryKey(),
+    enabled: boolean("enabled").notNull().default(false),
+    banThreshold: integer("ban_threshold").notNull().default(3),
+    kickThreshold: integer("kick_threshold").notNull().default(3),
+    channelThreshold: integer("channel_threshold").notNull().default(3),
+    roleThreshold: integer("role_threshold").notNull().default(3),
+    timeWindow: integer("time_window").notNull().default(10),
+    action: text("action").notNull().default("ban"),
+    logChannelId: text("log_channel_id"),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const antinukeWhitelistTable = pgTable("antinuke_whitelist", {
+    guildId: text("guild_id").notNull(),
+    userId: text("user_id").notNull(),
+    addedAt: timestamp("added_at").notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.guildId, t.userId] })]);
+
+// ── Confessions ───────────────────────────────────────────────────────────────
+export const confessionSettingsTable = pgTable("confession_settings", {
+    guildId: text("guild_id").primaryKey(),
+    enabled: boolean("enabled").notNull().default(false),
+    channelId: text("channel_id"),
+    reviewChannelId: text("review_channel_id"),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const confessionsTable = pgTable("confessions", {
+    id: serial("id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    authorId: text("author_id").notNull(),
+    content: text("content").notNull(),
+    status: text("status").notNull().default("pending"),
+    confessionMessageId: text("confession_message_id"),
+    reviewMessageId: text("review_message_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ── Top.gg Votes ──────────────────────────────────────────────────────────────
+export const voteRecordsTable = pgTable("vote_records", {
+    userId: text("user_id").primaryKey(),
+    lastVotedAt: timestamp("last_voted_at").notNull().defaultNow(),
+    voteStreak: integer("vote_streak").notNull().default(0),
+    totalVotes: integer("total_votes").notNull().default(0),
+});

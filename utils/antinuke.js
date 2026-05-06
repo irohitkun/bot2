@@ -1,138 +1,159 @@
 /**
-   * Anti-Nuke protection system.
-   * Tracks rapid destructive actions (mass bans, channel/role deletes, kicks)
-   * and punishes the attacker automatically.
-   */
-  import { PermissionFlagsBits, AuditLogEvent, EmbedBuilder } from "discord.js";
-  import { db } from "../db/index.js";
-  import { antinukeSettingsTable, antinukeWhitelistTable } from "../db/index.js";
-  import { eq } from "drizzle-orm";
+ * AntiNuke tracker — detects mass destructive actions (bans, kicks, channel/role deletes)
+ * within a rolling time window and takes action (ban/kick/strip roles) against the offender.
+ *
+ * Each guild maintains a Map of userId → [timestamps of actions].
+ * When the count within timeWindow exceeds threshold, the bot fires the configured action.
+ */
+import { AuditLogEvent, EmbedBuilder } from "discord.js";
+import { db, antinukeSettingsTable, antinukeWhitelistTable } from "../db/index.js";
+import { eq } from "drizzle-orm";
 
-  // In-memory action tracker: { guildId -> { userId -> { type -> timestamps[] } } }
-  const tracker = new Map();
+// { guildId → { userId → { bans: [], kicks: [], channelDeletes: [], roleDeletes: [] } } }
+const actionTracker = new Map();
 
-  const WINDOW_DEFAULT = 10; // seconds
+function getTracker(guildId, userId) {
+    if (!actionTracker.has(guildId)) actionTracker.set(guildId, new Map());
+    const guild = actionTracker.get(guildId);
+    if (!guild.has(userId)) guild.set(userId, { bans: [], kicks: [], channelDeletes: [], roleDeletes: [] });
+    return guild.get(userId);
+}
 
-  function getTrackerEntry(guildId, userId, type) {
-      if (!tracker.has(guildId)) tracker.set(guildId, new Map());
-      const guild = tracker.get(guildId);
-      if (!guild.has(userId)) guild.set(userId, {});
-      const user = guild.get(userId);
-      if (!user[type]) user[type] = [];
-      return user[type];
-  }
+function prune(tracker, key, windowMs) {
+    const cutoff = Date.now() - windowMs;
+    tracker[key] = tracker[key].filter((t) => t > cutoff);
+}
 
-  function pruneOld(timestamps, windowMs) {
-      const cutoff = Date.now() - windowMs;
-      return timestamps.filter(t => t > cutoff);
-  }
+async function getSettings(guildId) {
+    const [s] = await db.select().from(antinukeSettingsTable).where(eq(antinukeSettingsTable.guildId, guildId));
+    return s;
+}
 
-  // Clean tracker every minute
-  setInterval(() => {
-      for (const [guildId, guildMap] of tracker.entries()) {
-          for (const [userId, actions] of guildMap.entries()) {
-              let hasAny = false;
-              for (const type of Object.keys(actions)) {
-                  actions[type] = pruneOld(actions[type], 60000);
-                  if (actions[type].length > 0) hasAny = true;
-              }
-              if (!hasAny) guildMap.delete(userId);
-          }
-          if (guildMap.size === 0) tracker.delete(guildId);
-      }
-  }, 60 * 1000);
+async function isWhitelisted(guildId, userId) {
+    const [row] = await db.select().from(antinukeWhitelistTable)
+        .where(eq(antinukeWhitelistTable.guildId, guildId))
+        .where(eq(antinukeWhitelistTable.userId, userId));
+    return !!row;
+}
 
-  /**
-   * Track an action and return whether the antinuke should trigger.
-   * @returns {{ trigger: boolean, count: number, threshold: number }}
-   */
-  export async function trackAndCheck(guild, userId, type) {
-      // Get settings
-      const [settings] = await db.select().from(antinukeSettingsTable).where(eq(antinukeSettingsTable.guildId, guild.id));
-      if (!settings?.enabled) return { trigger: false };
+async function takeAction(guild, member, settings, reason) {
+    try {
+        const action = settings.action ?? "ban";
+        if (action === "ban") {
+            await guild.members.ban(member.id, { reason: `[AntiNuke] ${reason}` });
+        } else if (action === "kick") {
+            await member.kick(`[AntiNuke] ${reason}`);
+        } else if (action === "strip") {
+            const manageableRoles = member.roles.cache.filter(
+                (r) => r.id !== guild.id && r.position < guild.members.me.roles.highest.position
+            );
+            for (const role of manageableRoles.values()) {
+                await member.roles.remove(role).catch(() => {});
+            }
+        }
+    } catch (err) {
+        console.warn("[AntiNuke] Failed to take action:", err.message);
+    }
 
-      // Whitelist check
-      const [whitelisted] = await db.select().from(antinukeWhitelistTable)
-          .where(eq(antinukeWhitelistTable.guildId, guild.id));
-      const whitelist = await db.select().from(antinukeWhitelistTable).where(eq(antinukeWhitelistTable.guildId, guild.id));
-      if (whitelist.some(w => w.userId === userId)) return { trigger: false };
+    if (settings.logChannelId) {
+        try {
+            const logCh = guild.channels.cache.get(settings.logChannelId);
+            if (logCh?.isTextBased()) {
+                const embed = new EmbedBuilder()
+                    .setColor(0xed4245)
+                    .setTitle("🛡️ AntiNuke — Action Taken")
+                    .setDescription(`**Reason:** ${reason}`)
+                    .addFields(
+                        { name: "User", value: `<@${member.id}> (${member.user?.tag ?? member.id})`, inline: true },
+                        { name: "Action", value: settings.action ?? "ban", inline: true },
+                    )
+                    .setTimestamp();
+                await logCh.send({ embeds: [embed] });
+            }
+        } catch {}
+    }
+}
 
-      // Skip bots and the guild owner
-      if (userId === guild.ownerId) return { trigger: false };
+/**
+ * Track a ban action. Call from guildBanAdd handler after fetching audit log.
+ */
+export async function trackBan(guild, executorId) {
+    const settings = await getSettings(guild.id);
+    if (!settings?.enabled) return;
+    if (guild.ownerId === executorId) return;
+    if (await isWhitelisted(guild.id, executorId)) return;
 
-      const windowMs = (settings.timeWindow ?? WINDOW_DEFAULT) * 1000;
-      const thresholds = {
-          ban: settings.banThreshold ?? 3,
-          kick: settings.kickThreshold ?? 3,
-          channel_delete: settings.channelThreshold ?? 3,
-          role_delete: settings.roleThreshold ?? 3,
-      };
+    const tracker = getTracker(guild.id, executorId);
+    const windowMs = (settings.timeWindow ?? 10) * 1000;
+    prune(tracker, "bans", windowMs);
+    tracker.bans.push(Date.now());
 
-      const timestamps = getTrackerEntry(guild.id, userId, type);
-      timestamps.push(Date.now());
-      const recent = pruneOld(timestamps, windowMs);
-      // update in-place
-      const entry = tracker.get(guild.id)?.get(userId);
-      if (entry) entry[type] = recent;
+    if (tracker.bans.length >= (settings.banThreshold ?? 3)) {
+        tracker.bans = []; // reset to avoid repeated triggering
+        const member = await guild.members.fetch(executorId).catch(() => null);
+        if (member) await takeAction(guild, member, settings, `Mass ban detected (${tracker.bans.length + settings.banThreshold} bans in ${settings.timeWindow}s)`);
+    }
+}
 
-      const threshold = thresholds[type] ?? 3;
-      const trigger = recent.length >= threshold;
+/**
+ * Track a kick action. Call from guildMemberRemove handler after checking audit log.
+ */
+export async function trackKick(guild, executorId) {
+    const settings = await getSettings(guild.id);
+    if (!settings?.enabled) return;
+    if (guild.ownerId === executorId) return;
+    if (await isWhitelisted(guild.id, executorId)) return;
 
-      return { trigger, count: recent.length, threshold };
-  }
+    const tracker = getTracker(guild.id, executorId);
+    const windowMs = (settings.timeWindow ?? 10) * 1000;
+    prune(tracker, "kicks", windowMs);
+    tracker.kicks.push(Date.now());
 
-  /**
-   * Execute the configured punishment against an attacker.
-   */
-  export async function punishAttacker(guild, client, userId) {
-      const [settings] = await db.select().from(antinukeSettingsTable).where(eq(antinukeSettingsTable.guildId, guild.id));
-      if (!settings) return;
+    if (tracker.kicks.length >= (settings.kickThreshold ?? 3)) {
+        tracker.kicks = [];
+        const member = await guild.members.fetch(executorId).catch(() => null);
+        if (member) await takeAction(guild, member, settings, `Mass kick detected`);
+    }
+}
 
-      const member = await guild.members.fetch(userId).catch(() => null);
-      if (!member) {
-          // User may have already left — just ban
-          await guild.bans.create(userId, { reason: "[AntiNuke] Automated punishment: mass destructive actions detected" }).catch(() => {});
-          return;
-      }
+/**
+ * Track a channel delete. Call from channelDelete handler.
+ */
+export async function trackChannelDelete(guild, executorId) {
+    const settings = await getSettings(guild.id);
+    if (!settings?.enabled) return;
+    if (guild.ownerId === executorId) return;
+    if (await isWhitelisted(guild.id, executorId)) return;
 
-      // Never punish the guild owner or the bot itself
-      if (userId === guild.ownerId || userId === client.user.id) return;
+    const tracker = getTracker(guild.id, executorId);
+    const windowMs = (settings.timeWindow ?? 10) * 1000;
+    prune(tracker, "channelDeletes", windowMs);
+    tracker.channelDeletes.push(Date.now());
 
-      const action = settings.action ?? "ban";
-      const reason = "[AntiNuke] Automated punishment: mass destructive actions detected";
+    if (tracker.channelDeletes.length >= (settings.channelThreshold ?? 3)) {
+        tracker.channelDeletes = [];
+        const member = await guild.members.fetch(executorId).catch(() => null);
+        if (member) await takeAction(guild, member, settings, `Mass channel delete detected`);
+    }
+}
 
-      try {
-          if (action === "kick") {
-              await member.kick(reason);
-          } else if (action === "strip") {
-              const roles = member.roles.cache.filter(r => r.id !== guild.id && !r.managed);
-              for (const role of roles.values()) {
-                  await member.roles.remove(role, reason).catch(() => {});
-              }
-          } else {
-              // default: ban
-              await guild.bans.create(userId, { reason });
-          }
-      } catch (err) {
-          console.warn(`[AntiNuke] Failed to punish ${userId}:`, err.message);
-      }
+/**
+ * Track a role delete. Call from roleDelete handler.
+ */
+export async function trackRoleDelete(guild, executorId) {
+    const settings = await getSettings(guild.id);
+    if (!settings?.enabled) return;
+    if (guild.ownerId === executorId) return;
+    if (await isWhitelisted(guild.id, executorId)) return;
 
-      // Log to channel if set
-      if (settings.logChannelId) {
-          const logChannel = guild.channels.cache.get(settings.logChannelId) ??
-              await guild.channels.fetch(settings.logChannelId).catch(() => null);
-          if (logChannel?.isTextBased()) {
-              const embed = new EmbedBuilder()
-                  .setColor(0xed4245)
-                  .setTitle("🛡️ AntiNuke Triggered")
-                  .addFields(
-                      { name: "Target", value: `<@${userId}> (${userId})`, inline: true },
-                      { name: "Action", value: action.toUpperCase(), inline: true },
-                      { name: "Reason", value: "Mass destructive actions detected within time window" },
-                  )
-                  .setTimestamp();
-              logChannel.send({ embeds: [embed] }).catch(() => {});
-          }
-      }
-  }
-  
+    const tracker = getTracker(guild.id, executorId);
+    const windowMs = (settings.timeWindow ?? 10) * 1000;
+    prune(tracker, "roleDeletes", windowMs);
+    tracker.roleDeletes.push(Date.now());
+
+    if (tracker.roleDeletes.length >= (settings.roleThreshold ?? 3)) {
+        tracker.roleDeletes = [];
+        const member = await guild.members.fetch(executorId).catch(() => null);
+        if (member) await takeAction(guild, member, settings, `Mass role delete detected`);
+    }
+}

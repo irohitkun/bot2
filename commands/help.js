@@ -1,41 +1,47 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import {
+    SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
+} from "discord.js";
 import { helpCategories, getHelpCategory, formatCommands } from "../utils/helpCatalog.js";
 import { getGuildStyle } from "../utils/guildStyle.js";
 import { getPrefix } from "../utils/prefixCache.js";
 
 export const data = new SlashCommandBuilder()
     .setName("help")
-    .setDescription("Browse available bot commands")
-    .addStringOption((option) =>
-        option
-            .setName("category")
-            .setDescription("Command category to view")
-            .setRequired(false)
-            .addChoices(...helpCategories.map((category) => ({ name: category.label, value: category.key }))),
-    );
+    .setDescription("Browse all bot commands with an interactive category menu");
 
 export async function execute(interaction) {
-    const selected = interaction.options.getString("category");
     const { color } = await getGuildStyle(interaction.guild.id);
     const prefix = await getPrefix(interaction.guild.id);
+
     const embed = new EmbedBuilder()
         .setColor(color)
-        .setTitle(selected ? `${getHelpCategory(selected)?.label ?? "Commands"} Commands` : "Bot Help Center")
-        .setDescription(`Use slash commands with \`/\` or prefix commands with \`${prefix}\`.`)
+        .setTitle("📖 Bot Help Center")
+        .setDescription(
+            `Use slash commands with \`/\` or prefix commands with \`${prefix}\`\n\n**Select a category below** to view its commands in detail.`
+        )
         .setTimestamp();
 
-    if (selected) {
-        const category = getHelpCategory(selected);
-        if (!category) {
-            return interaction.reply({ content: "Unknown help category.", flags: 64 });
-        }
-        embed.addFields({ name: category.label, value: formatCommands(category.commands) });
-    } else {
-        for (const category of helpCategories) {
-            embed.addFields({ name: category.label, value: formatCommands(category.commands.slice(0, 6)) });
-        }
-        embed.setFooter({ text: "Run /help category:<name> to see a full category." });
+    for (const category of helpCategories) {
+        const preview = category.commands.slice(0, 4).map(([name]) => `\`${name}\``).join(", ");
+        const more = category.commands.length > 4 ? ` +${category.commands.length - 4} more` : "";
+        embed.addFields({ name: `${category.emoji ?? "📁"} ${category.label}`, value: preview + more, inline: true });
     }
 
-    await interaction.reply({ embeds: [embed], flags: 64 });
+    embed.setFooter({ text: "Use the dropdown below to explore each category" });
+
+    const menu = new StringSelectMenuBuilder()
+        .setCustomId("help:category")
+        .setPlaceholder("📂 Choose a command category...")
+        .addOptions(
+            helpCategories.map((cat) =>
+                new StringSelectMenuOptionBuilder()
+                    .setLabel(cat.label)
+                    .setValue(cat.key)
+                    .setDescription(cat.description ?? `View all ${cat.label.toLowerCase()} commands`)
+                    .setEmoji(cat.emoji ?? "📁")
+            )
+        );
+
+    const row = new ActionRowBuilder().addComponents(menu);
+    await interaction.reply({ embeds: [embed], components: [row] });
 }
