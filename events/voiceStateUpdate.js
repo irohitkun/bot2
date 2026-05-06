@@ -109,3 +109,34 @@ export async function execute(oldState, newState) {
         }
     } catch {}
 }
+
+  // ── J2C orphan cleanup (called on bot ready) ─────────────────────────────────
+  // Deletes any temp channels that exist in the DB but were never cleaned up
+  // (e.g. bot was offline when the last user left).
+  export async function cleanupOrphanedJ2CChannels(client) {
+      try {
+          const rows = await db.select().from(j2cTempChannelsTable);
+          if (rows.length === 0) return;
+          let cleaned = 0;
+          for (const row of rows) {
+              const guild = client.guilds.cache.get(row.guildId)
+                  ?? await client.guilds.fetch(row.guildId).catch(() => null);
+              if (!guild) {
+                  await db.delete(j2cTempChannelsTable).where(eq(j2cTempChannelsTable.channelId, row.channelId));
+                  cleaned++;
+                  continue;
+              }
+              const channel = guild.channels.cache.get(row.channelId)
+                  ?? await guild.channels.fetch(row.channelId).catch(() => null);
+              if (!channel || channel.members.size === 0) {
+                  if (channel) await channel.delete("J2C: orphan cleanup").catch(() => {});
+                  await db.delete(j2cTempChannelsTable).where(eq(j2cTempChannelsTable.channelId, row.channelId));
+                  cleaned++;
+              }
+          }
+          if (cleaned > 0) console.log(`[J2C] Cleaned up ${cleaned} orphaned temp channel(s)`);
+      } catch (err) {
+          console.error("[J2C] Orphan cleanup error:", err);
+      }
+  }
+  
