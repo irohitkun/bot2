@@ -21,7 +21,7 @@ export const client = new Client({
         GatewayIntentBits.GuildModeration,
         GatewayIntentBits.GuildMessageReactions,
         GatewayIntentBits.GuildMembers,
-        ...(process.env.MESSAGE_CONTENT_INTENT_ENABLED === "true" ? [GatewayIntentBits.MessageContent] : []),
+        GatewayIntentBits.MessageContent,
     ],
     partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
