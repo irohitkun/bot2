@@ -34,6 +34,7 @@ import { getGuildStyle } from "./guildStyle.js";
 import { scheduleGiveawayEnd } from "./giveawayScheduler.js";
 import { fetchAllMessages } from "./fetchAllMessages.js";
 import { parseDuration, formatDuration } from "./parseDuration.js";
+import { CHANGELOG, LATEST } from "../data/changelog.js";
 import { scheduleUnban } from "./tempBanScheduler.js";
 
 const _require = createRequire(import.meta.url);
@@ -566,6 +567,28 @@ const TOOLS = {
             return ok(`Announcement posted in ${channel} ([jump](${msg.url})).`);
         },
     },
+    announce_changelog: {
+        userPerm: PermissionFlagsBits.ManageGuild,
+        botPerm: PermissionFlagsBits.SendMessages,
+        describe: (a) => `Post v${LATEST.version} changelog in ${a.channel ?? "current channel"}`,
+        async execute(ctx, args) {
+            const { buildChangelogEmbed } = await import("../commands/changelog.js");
+            const channel = await resolveChannel(ctx.guild, args.channel, ctx.channel);
+            if (!channel?.isTextBased?.()) return fail("Target channel is not text-based.");
+            const me = ctx.guild.members.me;
+            if (!channel.permissionsFor(me)?.has(PermissionFlagsBits.SendMessages)) {
+                return fail(`I can't send messages in ${channel}.`);
+            }
+            const version = args.version
+                ? CHANGELOG.find((v) => v.version === String(args.version).replace(/^v/, ""))
+                : LATEST;
+            if (!version) return fail(`Version \`v${args.version}\` not found in changelog.`);
+            const embed = buildChangelogEmbed(version, ctx.member.user.tag);
+            const msg = await channel.send({ embeds: [embed] });
+            return ok(`v${version.version} changelog posted in ${channel} ([jump](${msg.url})).`);
+        },
+    },
+
 
     setup_ticket_panel: {
         userPerm: PermissionFlagsBits.ManageGuild,
@@ -1009,6 +1032,7 @@ Roles:
 - mass_role { role, filter_role, action ("add"|"remove") } — add/remove a role to/from all members who have filter_role (max 150)
 Server:
 - send_announcement { channel, title?, description? }
+- announce_changelog { channel?, version? } — post the bot changelog embed for the given (or latest) version
 - setup_ticket_panel { channel, title?, description?, support_role?, category? }
 - get_server_stats {} — fetch and post live member/channel/role counts
 Tickets:
@@ -1131,7 +1155,8 @@ function buildSystemPrompt(ctx) {
         `YOUR TWO JOBS:`,
         `  1. Convert natural-language operator requests into a JSON action plan using the tools listed in TOOL_DOC.`,
         `  2. Answer capability questions ("what can you do?", "how do tickets work?", "can you ban people?") using the EXACT CAPABILITIES section — return {"actions":[],"summary":"<accurate answer>"}.`,
-        `  3. When asked to announce a feature, compose compelling embed text and use send_announcement.`,
+        `  3. When asked to announce a feature, compose compelling embed text and use send_announcement.
+  4. When asked to "announce updates", "post the changelog", "share what's new", or "announce version X", use announce_changelog.`,
         ``,
         BOT_CAPABILITIES_DOC,
         ``,
