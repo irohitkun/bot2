@@ -5,13 +5,13 @@ import { getGuildStyle } from "../utils/guildStyle.js";
 export const data = new SlashCommandBuilder()
     .setName("changelog")
     .setDescription("View the bot's version history and what's new")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand((sub) => sub
         .setName("latest")
         .setDescription("Show what's new in the current version"))
     .addSubcommand((sub) => sub
         .setName("announce")
         .setDescription("Post the latest changelog as an announcement to a channel")
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
         .addChannelOption((o) => o.setName("channel").setDescription("Channel to post the announcement in (defaults to current)").setRequired(false)))
     .addSubcommand((sub) => sub
         .setName("list")
