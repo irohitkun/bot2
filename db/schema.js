@@ -100,6 +100,10 @@ export const serverCustomizationTable = pgTable("server_customization", {
     footerText: text("footer_text"),
     welcomeChannelId: text("welcome_channel_id"),
     welcomeMessage: text("welcome_message"),
+    welcomeEmbedTemplate: text("welcome_embed_template"),
+    leaveChannelId: text("leave_channel_id"),
+    leaveMessage: text("leave_message"),
+    leaveEmbedTemplate: text("leave_embed_template"),
     logChannelId: text("log_channel_id"),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -346,3 +350,24 @@ export const voteRecordsTable = pgTable("vote_records", {
     voteStreak: integer("vote_streak").notNull().default(0),
     totalVotes: integer("total_votes").notNull().default(0),
 });
+
+// ── Embed Templates ───────────────────────────────────────────────────────────
+// Named, reusable embed configs per guild. Referenced by welcome, leave, tickets, etc.
+// Supports variables: {user}, {user.name}, {user_avatar}, {server}, {server_icon}, {count}
+export const embedTemplatesTable = pgTable("embed_templates", {
+    id: serial("id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    name: text("name").notNull(),
+    title: text("title"),
+    description: text("description"),
+    color: text("color"),
+    footerText: text("footer_text"),
+    footerIconUrl: text("footer_icon_url"),
+    thumbnailUrl: text("thumbnail_url"),
+    imageUrl: text("image_url"),
+    authorName: text("author_name"),
+    authorIconUrl: text("author_icon_url"),
+    fieldsJson: text("fields_json"),
+    createdBy: text("created_by").notNull(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [unique("embed_templates_guild_name_unique").on(t.guildId, t.name)]);

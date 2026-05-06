@@ -1,13 +1,19 @@
--- Schema migrations: all new tables added in this upgrade
--- Safe to run multiple times: all statements use IF NOT EXISTS
+-- Schema migrations: all new tables and columns added across both upgrades
+-- Safe to run multiple times: all statements use IF NOT EXISTS / ADD COLUMN IF NOT EXISTS
 
--- AutoMod new columns (add only if missing)
+-- ── AutoMod new columns ────────────────────────────────────────────────────────
 ALTER TABLE automod_settings ADD COLUMN IF NOT EXISTS block_links BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE automod_settings ADD COLUMN IF NOT EXISTS block_invites BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE automod_settings ADD COLUMN IF NOT EXISTS regex_patterns TEXT NOT NULL DEFAULT '';
 ALTER TABLE automod_settings ADD COLUMN IF NOT EXISTS bypass_channels TEXT NOT NULL DEFAULT '';
 
--- Verification system
+-- ── Server Customization new columns (leave messages + embed templates) ────────
+ALTER TABLE server_customization ADD COLUMN IF NOT EXISTS welcome_embed_template TEXT;
+ALTER TABLE server_customization ADD COLUMN IF NOT EXISTS leave_channel_id TEXT;
+ALTER TABLE server_customization ADD COLUMN IF NOT EXISTS leave_message TEXT;
+ALTER TABLE server_customization ADD COLUMN IF NOT EXISTS leave_embed_template TEXT;
+
+-- ── Verification system ────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS verification_settings (
     guild_id TEXT PRIMARY KEY,
     enabled BOOLEAN NOT NULL DEFAULT false,
@@ -17,7 +23,7 @@ CREATE TABLE IF NOT EXISTS verification_settings (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- AntiNuke
+-- ── AntiNuke ───────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS antinuke_settings (
     guild_id TEXT PRIMARY KEY,
     enabled BOOLEAN NOT NULL DEFAULT false,
@@ -38,7 +44,7 @@ CREATE TABLE IF NOT EXISTS antinuke_whitelist (
     PRIMARY KEY (guild_id, user_id)
 );
 
--- Confessions
+-- ── Confessions ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS confession_settings (
     guild_id TEXT PRIMARY KEY,
     enabled BOOLEAN NOT NULL DEFAULT false,
@@ -58,10 +64,32 @@ CREATE TABLE IF NOT EXISTS confessions (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Top.gg vote records
+-- ── Top.gg vote records ────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS vote_records (
     user_id TEXT PRIMARY KEY,
     last_voted_at TIMESTAMP NOT NULL DEFAULT NOW(),
     vote_streak INTEGER NOT NULL DEFAULT 0,
     total_votes INTEGER NOT NULL DEFAULT 0
+);
+
+-- ── Embed Templates ────────────────────────────────────────────────────────────
+-- Named reusable embed configs per guild. Referenced by welcome, leave, etc.
+-- Supports variables: {user}, {user.name}, {user_avatar}, {server}, {server_icon}, {count}
+CREATE TABLE IF NOT EXISTS embed_templates (
+    id SERIAL PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    title TEXT,
+    description TEXT,
+    color TEXT,
+    footer_text TEXT,
+    footer_icon_url TEXT,
+    thumbnail_url TEXT,
+    image_url TEXT,
+    author_name TEXT,
+    author_icon_url TEXT,
+    fields_json TEXT,
+    created_by TEXT NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (guild_id, name)
 );

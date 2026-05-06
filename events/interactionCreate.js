@@ -15,11 +15,21 @@ import { executePlanByToken, peekPendingPlan, consumePendingPlan, logAIRun } fro
 import { helpCategories, getHelpCategory, formatCommands } from "../utils/helpCatalog.js";
 import { getPrefix } from "../utils/prefixCache.js";
 import { checkCooldown, formatRemaining } from "../utils/cooldown.js";
+import { getTemplate, upsertTemplate, buildEmbedFromTemplate } from "../utils/embedTemplates.js";
 
 export const name = Events.InteractionCreate;
 export const once = false;
 
 export async function execute(interaction) {
+    // ── Autocomplete ─────────────────────────────────────────────────────────
+    if (interaction.isAutocomplete()) {
+        const command = commands.get(interaction.commandName);
+        if (command?.execute) {
+            try { await command.execute(interaction); } catch {}
+        }
+        return;
+    }
+
     // ── Slash commands ───────────────────────────────────────────────────────
     if (interaction.isChatInputCommand()) {
         if (!interaction.guild) {
@@ -77,6 +87,12 @@ export async function execute(interaction) {
         if (interaction.customId.startsWith("confession:submit:")) {
             return handleConfessionSubmit(interaction);
         }
+        if (interaction.customId.startsWith("embedtemplate:create:")) {
+            return handleEmbedTemplateCreate(interaction);
+        }
+        if (interaction.customId.startsWith("embedtemplate:edit:")) {
+            return handleEmbedTemplateEdit(interaction);
+        }
     }
 
     // ── Button interactions ──────────────────────────────────────────────────
@@ -89,6 +105,101 @@ export async function execute(interaction) {
         if (customId.startsWith("confession:approve:")) return handleConfessionApprove(interaction);
         if (customId.startsWith("confession:deny:")) return handleConfessionDeny(interaction);
     }
+}
+
+// ── Embed Template modal handlers ─────────────────────────────────────────────
+async function handleEmbedTemplateCreate(interaction) {
+    const name = interaction.customId.replace("embedtemplate:create:", "");
+    const title = interaction.fields.getTextInputValue("embed_title") || null;
+    const description = interaction.fields.getTextInputValue("embed_description");
+    const colorRaw = interaction.fields.getTextInputValue("embed_color") || null;
+    const footerText = interaction.fields.getTextInputValue("embed_footer") || null;
+    const thumbnailUrl = interaction.fields.getTextInputValue("embed_thumbnail") || null;
+
+    // Validate color if provided
+    if (colorRaw) {
+        const cleaned = colorRaw.replace("#", "").trim();
+        if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) {
+            return interaction.reply({ content: "❌ Invalid color hex. Use 6 hex characters (e.g. `FF5733`). Template not saved.", flags: 64 });
+        }
+    }
+
+    const color = colorRaw ? colorRaw.replace("#", "").toUpperCase() : null;
+    const { color: fallbackColor } = await getGuildStyle(interaction.guild.id);
+
+    const savedName = await upsertTemplate(interaction.guild.id, name, {
+        title, description, color, footerText, thumbnailUrl,
+    }, interaction.user.id);
+
+    // Show a preview
+    const template = await getTemplate(interaction.guild.id, savedName);
+    const previewVars = {
+        userMention: interaction.user.toString(),
+        userName: interaction.user.username,
+        userTag: interaction.user.tag,
+        userAvatar: interaction.user.displayAvatarURL({ size: 256 }),
+        serverName: interaction.guild.name,
+        serverIcon: interaction.guild.iconURL({ size: 256 }) ?? "",
+        count: interaction.guild.memberCount,
+    };
+    const previewEmbed = buildEmbedFromTemplate(template, previewVars, fallbackColor);
+
+    return interaction.reply({
+        content: `✅ Template \`${savedName}\` created!\n\n**Preview** (with your data as example variables):\nAdd fields with \`/embedtemplate addfield ${savedName}\` · Use in welcome with \`/welcome set embed_template:${savedName}\``,
+        embeds: [previewEmbed],
+        flags: 64,
+    });
+}
+
+async function handleEmbedTemplateEdit(interaction) {
+    const name = interaction.customId.replace("embedtemplate:edit:", "");
+    const existing = await getTemplate(interaction.guild.id, name);
+    if (!existing) {
+        return interaction.reply({ content: `❌ Template \`${name}\` no longer exists.`, flags: 64 });
+    }
+
+    const title = interaction.fields.getTextInputValue("embed_title") || null;
+    const description = interaction.fields.getTextInputValue("embed_description");
+    const colorRaw = interaction.fields.getTextInputValue("embed_color") || null;
+    const footerText = interaction.fields.getTextInputValue("embed_footer") || null;
+    const thumbnailUrl = interaction.fields.getTextInputValue("embed_thumbnail") || null;
+
+    if (colorRaw) {
+        const cleaned = colorRaw.replace("#", "").trim();
+        if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) {
+            return interaction.reply({ content: "❌ Invalid color hex. Changes not saved.", flags: 64 });
+        }
+    }
+
+    const color = colorRaw ? colorRaw.replace("#", "").toUpperCase() : null;
+    const { color: fallbackColor } = await getGuildStyle(interaction.guild.id);
+
+    // Preserve existing fields and extra properties
+    await upsertTemplate(interaction.guild.id, name, {
+        title, description, color, footerText, thumbnailUrl,
+        imageUrl: existing.imageUrl,
+        authorName: existing.authorName,
+        authorIconUrl: existing.authorIconUrl,
+        fieldsJson: existing.fieldsJson,
+    }, existing.createdBy);
+
+    const updated = await getTemplate(interaction.guild.id, name);
+    const previewVars = {
+        userMention: interaction.user.toString(),
+        userName: interaction.user.username,
+        userTag: interaction.user.tag,
+        userAvatar: interaction.user.displayAvatarURL({ size: 256 }),
+        serverName: interaction.guild.name,
+        serverIcon: interaction.guild.iconURL({ size: 256 }) ?? "",
+        count: interaction.guild.memberCount,
+    };
+    const previewEmbed = buildEmbedFromTemplate(updated, previewVars, fallbackColor);
+
+    return interaction.reply({
+        content: `✅ Template \`${name}\` updated! Preview below:`,
+        embeds: [previewEmbed],
+        flags: 64,
+    });
 }
 
 // ── AI Plan buttons ──────────────────────────────────────────────────────────
@@ -140,7 +251,7 @@ async function handleOpenTicket(interaction) {
     const newCount = (settings.ticketCount ?? 0) + 1;
     await db.update(ticketSettingsTable).set({ ticketCount: newCount, updatedAt: new Date() }).where(eq(ticketSettingsTable.guildId, guild.id));
 
-    // FIX: Channel name is ticket-username instead of ticket-0001
+    // ticket-username naming
     const safeUsername = user.username.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 20) || "user";
     const channelName = `ticket-${safeUsername}`;
 
