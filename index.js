@@ -3,16 +3,15 @@ import { Client, GatewayIntentBits, Partials, Collection } from "discord.js";
 import { createServer, get as httpGet } from "http";
 import { loadCommands } from "./utils/loadCommands.js";
 import { loadEvents } from "./utils/loadEvents.js";
-import { initErrorLogger, logUnhandledRejection, logUncaughtException } from "./utils/errorLogger.js";
 
 // ── Global crash protection ───────────────────────────────────────────────────
 // Prevents any single unhandled rejection or exception from killing the process.
 process.on("unhandledRejection", (reason) => {
-    logUnhandledRejection(reason);
+    console.error("[Process] Unhandled promise rejection:", reason);
 });
 
 process.on("uncaughtException", (err) => {
-    logUncaughtException(err);
+    console.error("[Process] Uncaught exception:", err);
 });
 
 export const client = new Client({
@@ -92,7 +91,6 @@ async function main() {
     await loadCommands(commands);
     await loadEvents(client);
     await client.login(process.env.DISCORD_BOT_TOKEN);
-    initErrorLogger(client);
 }
 
 main().catch((err) => {
