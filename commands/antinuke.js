@@ -2,7 +2,6 @@ import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from "discord.
 import { db, antinukeSettingsTable, antinukeWhitelistTable } from "../db/index.js";
 import { eq, and } from "drizzle-orm";
 import { getGuildStyle } from "../utils/guildStyle.js";
-import { requireAdmin } from "../utils/permissions.js";
 
 export const data = new SlashCommandBuilder()
     .setName("antinuke")
