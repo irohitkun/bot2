@@ -39,7 +39,7 @@ import { EmbedBuilder } from "discord.js";
   }
 
   export function logCommandError(commandName, err) {
-      const text = `**Command:** `/${commandName}`\n\n${err.message}\n\n${err.stack ?? ""}`;
+      const text = `**Command:** \`/${commandName}\`\n\n${err.message}\n\n${err.stack ?? ""}`;
       console.error(`[Command:${commandName}] Error:`, err);
       sendErrorEmbed("🔧 Command Error", text, 0xffa500);
   }
