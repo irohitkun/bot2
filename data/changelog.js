@@ -7,6 +7,26 @@
  */
 export const CHANGELOG = [
     {
+          version: "2.4",
+          date: "2025-05-06",
+          title: "Top.gg Compliance & Paid Premium",
+          color: 0x5865f2,
+          sections: {
+              added: [
+                  "**`/premiumadmin activate`** — bot owner can now grant Premium to any server manually. Supports permanent (no expiry) for paid customers, or a custom number of days. Includes a `notes` field to log payment details (e.g. UPI transaction ID).",
+                  "**`/premiumadmin revoke`** — bot owner can immediately remove Premium from any server with an optional reason. Instantly downgrades the server to free tier.",
+                  "**Paid permanent Premium** — servers can now receive lifetime Premium that never expires, activated via `/premiumadmin activate guild_id:... permanent:true`.",
+              ],
+              changed: [
+                  "**Invite link** — updated to use granular permissions instead of Administrator. Now requests only the specific permissions Crux needs (Kick, Ban, Manage Roles, Manage Messages, Timeout, etc.). Top.gg compliant.",
+                  "**`/premiumadmin`** — refactored from a single list command into a full subcommand suite: `list`, `activate`, `revoke`.",
+              ],
+              fixed: [
+                  "**No-prefix bot owner bypass** — removed `isBotOwner` shortcut from `canUseNoPrefix()`. Bot owner no longer bypasses no-prefix access controls in other servers.",
+              ],
+          },
+      },
+      {
           version: "2.3",
           date: "2025-05-06",
           title: "Self-Service Premium & Vote Rewards",
