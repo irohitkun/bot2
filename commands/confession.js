@@ -5,7 +5,6 @@ import {
 import { db, confessionSettingsTable } from "../db/index.js";
 import { eq } from "drizzle-orm";
 import { getGuildStyle } from "../utils/guildStyle.js";
-import { requireAdmin } from "../utils/permissions.js";
 
 export const data = new SlashCommandBuilder()
     .setName("confession")
@@ -20,7 +19,7 @@ export async function execute(interaction) {
     const sub = interaction.options.getSubcommand();
 
     if (sub === "setup") {
-        if (!requireAdmin(interaction)) {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({ content: "❌ You need Administrator permission to configure confessions.", flags: 64 });
         }
         const channel = interaction.options.getChannel("channel");
@@ -46,7 +45,7 @@ export async function execute(interaction) {
     }
 
     if (sub === "disable") {
-        if (!requireAdmin(interaction)) {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({ content: "❌ You need Administrator permission.", flags: 64 });
         }
         await db.update(confessionSettingsTable).set({ enabled: false, updatedAt: new Date() })
