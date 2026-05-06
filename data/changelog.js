@@ -7,6 +7,31 @@
  */
 export const CHANGELOG = [
     {
+          version: "2.3",
+          date: "2025-05-06",
+          title: "Self-Service Premium & Vote Rewards",
+          color: 0xf1c40f,
+          sections: {
+              added: [
+                  "**Vote-Based Premium** — server owners can unlock Premium for free by voting for Crux on top.gg. One vote = 12 hours of Premium, auto-renewable. Run `/premium vote` after voting to activate instantly.",
+                  "**30-Day Free Trial** — server owners can activate a one-time 30-day Premium trial themselves with `/freetrial`. No bot owner involvement required.",
+                  "**Self-service premium** — all premium activation and trial commands are now fully controlled by the server owner. Zero bot owner dependency.",
+              ],
+              changed: [
+                  "**`/premium`** — replaced bot-owner-only `activate`/`deactivate`/`list` subcommands with a new `vote` subcommand. Server owners activate premium themselves.",
+                  "**`/freetrial`** — now usable by the server owner directly in their own server. Trial extended from 7 days to 30 days.",
+                  "**Premium denied messages** — now tell users to vote on top.gg or use `/freetrial` instead of contacting the bot owner.",
+              ],
+              fixed: [
+                  "**Import crash on startup** — removed dead `requireAdmin` imports in `antinuke.js` and `confession.js` that caused the bot to fail to start.",
+                  "**Changelog subcommand crash** — `setDefaultMemberPermissions` was applied to a subcommand instead of the main command builder.",
+                  "**Voice state event crash** — `cleanupOrphanedJ2CChannels` was missing from `voiceStateUpdate.js` exports.",
+                  "**Prefix help crash** — `getPrefixHelpCategories` (nonexistent) replaced with the correct `helpCategories` export.",
+                  "**`/noprefix`** — removed `isBotOwner` fallback; guild owner check is now the sole gate as intended.",
+              ],
+          },
+      },
+      {
         version: "2.2",
         date: "2025-05-06",
         title: "The Big Systems Update",
