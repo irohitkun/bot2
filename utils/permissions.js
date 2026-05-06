@@ -190,7 +190,7 @@ export function premiumDeniedEmbed(featureName) {
     const embed = new EmbedBuilder()
         .setColor(0xf1c40f)
         .setTitle(`${detail?.icon ?? "⭐"} ${featureName} — Premium Feature`)
-        .setFooter({ text: "Use /premium info to see everything Premium unlocks • /premium status to check your server" });
+        .setFooter({ text: "Vote on top.gg → /premium vote to activate • /freetrial for 30-day trial • /premium info for details" });
 
     if (detail) {
         embed
@@ -200,8 +200,8 @@ export function premiumDeniedEmbed(featureName) {
                 detail.perks.map((p) => `✦ ${p}`).join("\n")
             )
             .addFields({
-                name: "🚀 How to get Premium",
-                value: "Contact the bot owner to activate Premium for your server.\nUse `/premium info` to see the full feature list.",
+                name: "🗳️ How to get Premium — Free!",
+                value: "Vote for Crux on top.gg and run `/premium vote` to unlock **12 hours of Premium** instantly.\nOr use `/freetrial` for a free 30-day trial (server owner only, one per server).",
                 inline: false,
             });
     } else {
@@ -209,7 +209,8 @@ export function premiumDeniedEmbed(featureName) {
             `**${featureName}** is a Premium feature.\n\n` +
             `Premium unlocks AutoMod, server logs, custom prefix, embed builder, ` +
             `unlimited reaction roles, giveaway reroll, multiple ticket panels, no-prefix mode, and more.\n\n` +
-            `Use \`/premium info\` to learn more and \`/premium status\` to check your server.`
+            `🗳️ **Get it free:** Vote for Crux on top.gg then run \`/premium vote\`.\n` +
+            `Or use \`/freetrial\` for a free 30-day trial (server owner only).`
         );
     }
 
