@@ -1,5 +1,5 @@
 import { EmbedBuilder } from "discord.js";
-import { getPrefixHelpCategories, formatCommands } from "../utils/helpCatalog.js";
+import { helpCategories, formatCommands } from "../utils/helpCatalog.js";
 import { getPrefix } from "../utils/prefixCache.js";
 
 export const command = {
@@ -9,7 +9,7 @@ export const command = {
     async execute(message, args = []) {
         const prefix = await getPrefix(message.guild.id);
         const selected = args[0]?.toLowerCase();
-        const prefixCategories = getPrefixHelpCategories();
+        const prefixCategories = helpCategories;
         const category = selected ? prefixCategories.find((item) => item.key === selected) : null;
         const embed = new EmbedBuilder()
             .setColor(0x5865f2)
