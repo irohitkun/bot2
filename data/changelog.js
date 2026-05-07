@@ -8,7 +8,7 @@
 export const CHANGELOG = [
     {
           version: "2.4",
-          date: "2025-05-06",
+          date: "2025-05-07",
           title: "Top.gg Compliance & Paid Premium",
           color: 0x5865f2,
           sections: {
@@ -52,7 +52,7 @@ export const CHANGELOG = [
           },
       },
       {
-        version: "2.2",
+        version: "2.5",
         date: "2025-05-06",
         title: "The Big Systems Update",
         color: 0x57f287,
