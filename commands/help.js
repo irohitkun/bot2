@@ -1,9 +1,13 @@
 import {
-    SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
+    SlashCommandBuilder, EmbedBuilder, ActionRowBuilder,
+    StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
+    ButtonBuilder, ButtonStyle,
 } from "discord.js";
 import { helpCategories, getHelpCategory, formatCommands } from "../utils/helpCatalog.js";
 import { getGuildStyle } from "../utils/guildStyle.js";
 import { getPrefix } from "../utils/prefixCache.js";
+import { DOCS_URL, FEEDBACK_URL } from "../config/constants.js";
+import { LATEST } from "../data/changelog.js";
 
 export const data = new SlashCommandBuilder()
     .setName("help")
@@ -15,9 +19,11 @@ export async function execute(interaction) {
 
     const embed = new EmbedBuilder()
         .setColor(color)
-        .setTitle("📖 Bot Help Center")
+        .setTitle("📖 CruxBot Help Center")
         .setDescription(
-            `Use slash commands with \`/\` or prefix commands with \`${prefix}\`\n\n**Select a category below** to view its commands in detail.`
+            `Use \`/command\` for slash or \`${prefix}command\` for prefix.\n` +
+            `**[📖 Docs](${DOCS_URL})** · **[💬 Feedback](${FEEDBACK_URL})** · **[🚀 What's new in v${LATEST.version}](/changelog)**\n\n` +
+            `Select a category below to see its commands.`
         )
         .setTimestamp();
 
@@ -27,7 +33,8 @@ export async function execute(interaction) {
         embed.addFields({ name: `${category.emoji ?? "📁"} ${category.label}`, value: preview + more, inline: true });
     }
 
-    embed.setFooter({ text: "Use the dropdown below to explore each category" });
+    const totalCmds = helpCategories.reduce((a, c) => a + c.commands.length, 0);
+    embed.setFooter({ text: `${totalCmds} commands · cruxbot.vercel.app` });
 
     const menu = new StringSelectMenuBuilder()
         .setCustomId("help:category")
@@ -42,6 +49,11 @@ export async function execute(interaction) {
             )
         );
 
-    const row = new ActionRowBuilder().addComponents(menu);
-    await interaction.reply({ embeds: [embed], components: [row] });
+    const menuRow = new ActionRowBuilder().addComponents(menu);
+    const linkRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setLabel("Documentation").setEmoji("📖").setStyle(ButtonStyle.Link).setURL(DOCS_URL),
+        new ButtonBuilder().setLabel("Feedback & Suggestions").setEmoji("💬").setStyle(ButtonStyle.Link).setURL(FEEDBACK_URL),
+    );
+
+    await interaction.reply({ embeds: [embed], components: [menuRow, linkRow] });
 }
