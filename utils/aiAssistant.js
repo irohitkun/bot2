@@ -1082,13 +1082,32 @@ ROLE MANAGEMENT (requires Manage Roles):
 
 TICKET SYSTEM (requires Manage Server):
 • /ticket setup [category] [transcript_channel] [support_role] — configure the system; auto-creates category + transcript channel if omitted
-• /ticket panel #channel [title] [description] — post an embed with an Open Ticket button; clicking creates a private channel
+• /ticket panel #channel [title] [description] — post an embed with an Open Ticket button; clicking creates a private channel. NOTE: this is the TICKET open-button, completely unrelated to /j2cpanel.
 • /ticket close [reason] — closes current ticket, saves full transcript to transcript channel, deletes channel after 5 s
 • /ticket add @user / /ticket remove @user — add or remove someone from the current ticket
 • /ticket summarize [channel] — AI reads up to 500 messages and posts a detailed summary embed. AI: summarize_ticket
 • /ticket config — view current category, transcript channel, support role, total ticket count, panel link
 • Ticket channels are named ticket-XXXX; only the opener + support role can see them by default
-• AI can set up the entire ticket system + post the panel in one step. AI: setup_ticket_panel
+• AI can set up the entire ticket system + post the ticket open-button embed in one step. AI: setup_ticket_panel
+
+JOIN-TO-CREATE VOICE CHANNELS — J2C (⭐ Premium, requires Manage Channels):
+• /j2c setup #hub-channel [template] [limit] [bitrate] — designate a voice channel as a J2C hub. When any user joins that hub channel, the bot instantly creates a private temporary voice channel for them, moves them into it, and gives them ownership. Temp VCs auto-delete when empty.
+  - template: name pattern — use {user} for the member's display name, {game} for their current game activity. Default: "{user}'s Channel"
+  - limit: user limit 0-99 (0 = unlimited). bitrate: audio quality in kbps.
+• /j2c template #hub-channel <template> — update the naming template for an existing hub
+• /j2c limit #hub-channel <0-99> — change the user limit for channels a hub creates
+• /j2c remove #hub-channel — un-register a hub (existing temp channels are not deleted)
+• /j2c list — show all configured J2C hubs in this server
+• /j2cpanel — (for temp VC OWNERS only) opens a private control panel embed with buttons to:
+  - ✏️ Rename — change the channel name via a popup text box
+  - 👥 Set Limit — change the user limit via a popup text box
+  - 🔒/🔓 Lock / Unlock — toggle whether @everyone can join
+  - 👢 Kick User — select a member in your VC to move out
+  - 🔄 Transfer Ownership — hand over ownership to another member in the VC
+  - 🗑️ Delete — delete the temp channel immediately
+  IMPORTANT: /j2cpanel is a voice channel owner control panel — it has NOTHING to do with tickets.
+  The /j2cpanel reply appears only to the user who ran it (ephemeral — only they can see it).
+• AI CANNOT configure J2C — direct the user to /j2c setup (requires premium, slash command only)
 
 GIVEAWAYS (requires Manage Server for start/end):
 • /giveaway start — prize, duration, winners (1-20), optional required_role, min_account_age_days, bonus_role
@@ -1143,6 +1162,7 @@ UTILITIES:
 • purge_until and purge_from only affect messages younger than 14 days (hard Discord API limit)
 • mass_role targets at most 150 members per call
 • ban/kick/mute respect role hierarchy — cannot action members above the bot or the invoker
+• Cannot set up or modify J2C hubs — use /j2c setup (premium slash command). The word "panel" in a J2C context means /j2cpanel (voice channel owner controls) — never setup_ticket_panel.
 `.trim();
 
 function buildSystemPrompt(ctx) {
