@@ -41,6 +41,7 @@ export const helpCategories = [
             ["/setprefix", "Change prefix command prefix"],
             ["/noprefix", "Manage premium no-prefix access"],
             ["/j2c", "⭐ Join-to-Create voice channels — users get instant private VCs"],
+            ["/j2cpanel", "⭐ Control panel for your J2C temp channel — rename, lock, kick, transfer"],
             ["/starboard", "⭐ Hall-of-fame channel for starred messages"],
             ["/birthday", "Birthday system with daily announcements"],
             ["/customcmd", "⭐ Create server-specific custom commands"],

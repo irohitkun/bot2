@@ -80,10 +80,11 @@ export function buildChangelogEmbed(entry, announcedBy = null) {
         removed: "Removed",
     };
 
+    const timestamp = entry.date ? new Date(entry.date) : new Date();
     const embed = new EmbedBuilder()
         .setColor(entry.color ?? 0x57f287)
         .setTitle(`🚀 Version ${entry.version} — ${entry.title}`)
-        .setTimestamp(new Date(entry.date));
+        .setTimestamp(timestamp);
 
     for (const [key, label] of Object.entries(sectionLabels)) {
         const items = entry.sections?.[key];
@@ -94,9 +95,10 @@ export function buildChangelogEmbed(entry, announcedBy = null) {
         });
     }
 
+    const released = entry.date ?? "Unknown";
     const footer = announcedBy
-        ? `v${entry.version} • Released ${entry.date} • Announced by ${announcedBy}`
-        : `v${entry.version} • Released ${entry.date}`;
+        ? `v${entry.version} • Released ${released} • Announced by ${announcedBy}`
+        : `v${entry.version} • Released ${released}`;
     embed.setFooter({ text: footer });
 
     return embed;

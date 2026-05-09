@@ -17,8 +17,10 @@ export async function execute(oldState, newState) {
             const [hub] = await db.select().from(j2cHubsTable)
                 .where(and(eq(j2cHubsTable.guildId, guild.id), eq(j2cHubsTable.channelId, newState.channelId)));
             if (hub) {
+                const channelName = (hub.nameTemplate ?? "{user}'s Channel")
+                    .replace(/\{user\}/gi, newState.member.displayName);
                 const tempChannel = await guild.channels.create({
-                    name: `${newState.member.displayName}'s Channel`,
+                    name: channelName,
                     type: ChannelType.GuildVoice,
                     parent: hub.categoryId ?? newState.channel?.parentId ?? null,
                     userLimit: hub.userLimit,

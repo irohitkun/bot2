@@ -7,7 +7,7 @@
  */
 import { AuditLogEvent, EmbedBuilder } from "discord.js";
 import { db, antinukeSettingsTable, antinukeWhitelistTable } from "../db/index.js";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 // { guildId → { userId → { bans: [], kicks: [], channelDeletes: [], roleDeletes: [] } } }
 const actionTracker = new Map();
@@ -31,8 +31,7 @@ async function getSettings(guildId) {
 
 async function isWhitelisted(guildId, userId) {
     const [row] = await db.select().from(antinukeWhitelistTable)
-        .where(eq(antinukeWhitelistTable.guildId, guildId))
-        .where(eq(antinukeWhitelistTable.userId, userId));
+        .where(and(eq(antinukeWhitelistTable.guildId, guildId), eq(antinukeWhitelistTable.userId, userId)));
     return !!row;
 }
 

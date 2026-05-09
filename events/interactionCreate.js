@@ -1,12 +1,13 @@
 import {
     Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
     ChannelType, PermissionFlagsBits,
+    ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder,
 } from "discord.js";
 import { commands } from "../index.js";
 import { db } from "../db/index.js";
 import {
     ticketSettingsTable, ticketsTable, verificationSettingsTable,
-    confessionSettingsTable, confessionsTable,
+    confessionSettingsTable, confessionsTable, j2cTempChannelsTable,
 } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { getGuildStyle } from "../utils/guildStyle.js";
@@ -62,26 +63,6 @@ export async function execute(interaction) {
         return;
     }
 
-    // ── Select menu — help category browser ─────────────────────────────────
-    if (interaction.isStringSelectMenu() && interaction.customId === "help:category") {
-        const key = interaction.values[0];
-        const { color } = await getGuildStyle(interaction.guild.id);
-        const prefix = await getPrefix(interaction.guild.id);
-        const category = getHelpCategory(key);
-        if (!category) return interaction.reply({ content: "❌ Unknown category.", flags: 64 }).catch(() => {});
-
-        const embed = new EmbedBuilder()
-            .setColor(color)
-            .setTitle(`${category.emoji ?? "📁"} ${category.label} Commands`)
-            .setDescription(`Use \`/command\` for slash or \`${prefix}command\` for prefix.\n\n` + formatCommands(category.commands))
-            .setFooter({ text: `${category.commands.length} commands in this category` })
-            .setTimestamp();
-
-        return interaction.update({ embeds: [embed] }).catch(() =>
-            interaction.reply({ embeds: [embed], flags: 64 }).catch(() => {})
-        );
-    }
-
     // ── Modals ───────────────────────────────────────────────────────────────
     if (interaction.isModalSubmit()) {
         if (interaction.customId.startsWith("confession:submit:")) {
@@ -92,6 +73,34 @@ export async function execute(interaction) {
         }
         if (interaction.customId.startsWith("embedtemplate:edit:")) {
             return handleEmbedTemplateEdit(interaction);
+        }
+        if (interaction.customId.startsWith("j2c:modal:")) {
+            return handleJ2CModal(interaction);
+        }
+    }
+
+    // ── Select menus ─────────────────────────────────────────────────────────
+    if (interaction.isStringSelectMenu()) {
+        if (interaction.customId === "help:category") {
+            const key = interaction.values[0];
+            const { color } = await getGuildStyle(interaction.guild.id);
+            const prefix = await getPrefix(interaction.guild.id);
+            const category = getHelpCategory(key);
+            if (!category) return interaction.reply({ content: "❌ Unknown category.", flags: 64 }).catch(() => {});
+
+            const embed = new EmbedBuilder()
+                .setColor(color)
+                .setTitle(`${category.emoji ?? "📁"} ${category.label} Commands`)
+                .setDescription(`Use \`/command\` for slash or \`${prefix}command\` for prefix.\n\n` + formatCommands(category.commands))
+                .setFooter({ text: `${category.commands.length} commands in this category` })
+                .setTimestamp();
+
+            return interaction.update({ embeds: [embed] }).catch(() =>
+                interaction.reply({ embeds: [embed], flags: 64 }).catch(() => {})
+            );
+        }
+        if (interaction.customId === "j2c:kick_select" || interaction.customId === "j2c:transfer_select") {
+            return handleJ2CSelect(interaction);
         }
     }
 
@@ -104,6 +113,7 @@ export async function execute(interaction) {
         if (customId === "verify:click") return handleVerification(interaction);
         if (customId.startsWith("confession:approve:")) return handleConfessionApprove(interaction);
         if (customId.startsWith("confession:deny:")) return handleConfessionDeny(interaction);
+        if (customId.startsWith("j2c:")) return handleJ2CPanel(interaction);
     }
 }
 
@@ -431,4 +441,211 @@ async function handleConfessionDeny(interaction) {
         embeds: [new EmbedBuilder().setColor(0xed4245).setTitle(`❌ Confession #${confessionId} Denied`).setDescription(`Denied by ${interaction.user.tag}`).setTimestamp()],
         components: [],
     }).catch(() => {});
+}
+
+// ── J2C Panel — button handler ───────────────────────────────────────────────
+async function handleJ2CPanel(interaction) {
+    const { customId, member, guild } = interaction;
+
+    const voiceChannel = member.voice?.channel;
+    if (!voiceChannel) {
+        return interaction.reply({ content: "❌ You must be in your temp voice channel to use these controls.", flags: 64 }).catch(() => {});
+    }
+
+    let temp;
+    try {
+        [temp] = await db.select().from(j2cTempChannelsTable)
+            .where(eq(j2cTempChannelsTable.channelId, voiceChannel.id));
+    } catch {
+        return interaction.reply({ content: "❌ Database error — please try again.", flags: 64 }).catch(() => {});
+    }
+
+    if (!temp) {
+        return interaction.reply({ content: "❌ You are not in a J2C temporary channel.", flags: 64 }).catch(() => {});
+    }
+    if (temp.ownerId !== interaction.user.id) {
+        return interaction.reply({ content: `❌ Only <@${temp.ownerId}> (the channel owner) can use these controls.`, flags: 64 }).catch(() => {});
+    }
+
+    if (customId === "j2c:rename") {
+        const modal = new ModalBuilder()
+            .setCustomId("j2c:modal:rename")
+            .setTitle("Rename Your Channel")
+            .addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId("j2c_name")
+                        .setLabel("New Channel Name")
+                        .setStyle(TextInputStyle.Short)
+                        .setMaxLength(100)
+                        .setValue(voiceChannel.name)
+                        .setRequired(true),
+                ),
+            );
+        return interaction.showModal(modal).catch(() => {});
+    }
+
+    if (customId === "j2c:setlimit") {
+        const modal = new ModalBuilder()
+            .setCustomId("j2c:modal:limit")
+            .setTitle("Set User Limit")
+            .addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId("j2c_limit")
+                        .setLabel("User limit (0 = unlimited, max 99)")
+                        .setStyle(TextInputStyle.Short)
+                        .setMaxLength(2)
+                        .setValue(String(voiceChannel.userLimit ?? 0))
+                        .setRequired(true),
+                ),
+            );
+        return interaction.showModal(modal).catch(() => {});
+    }
+
+    if (customId === "j2c:lock") {
+        try {
+            await voiceChannel.permissionOverwrites.edit(guild.roles.everyone, { Connect: false });
+            return interaction.reply({ content: "🔒 Channel locked — new members cannot join.", flags: 64 });
+        } catch {
+            return interaction.reply({ content: "❌ Failed to lock channel — check my permissions.", flags: 64 });
+        }
+    }
+
+    if (customId === "j2c:unlock") {
+        try {
+            await voiceChannel.permissionOverwrites.edit(guild.roles.everyone, { Connect: null });
+            return interaction.reply({ content: "🔓 Channel unlocked — anyone can join.", flags: 64 });
+        } catch {
+            return interaction.reply({ content: "❌ Failed to unlock channel — check my permissions.", flags: 64 });
+        }
+    }
+
+    if (customId === "j2c:kick") {
+        const others = voiceChannel.members.filter((m) => m.id !== interaction.user.id);
+        if (others.size === 0) {
+            return interaction.reply({ content: "❌ No other members in your channel to kick.", flags: 64 });
+        }
+        const options = others.map((m) => ({ label: m.displayName.slice(0, 100), value: m.id }));
+        const row = new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId("j2c:kick_select")
+                .setPlaceholder("Choose a member to disconnect")
+                .addOptions(options),
+        );
+        return interaction.reply({ content: "Select a member to remove from your channel:", components: [row], flags: 64 });
+    }
+
+    if (customId === "j2c:transfer") {
+        const others = voiceChannel.members.filter((m) => m.id !== interaction.user.id);
+        if (others.size === 0) {
+            return interaction.reply({ content: "❌ No other members in your channel to transfer ownership to.", flags: 64 });
+        }
+        const options = others.map((m) => ({ label: m.displayName.slice(0, 100), value: m.id }));
+        const row = new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId("j2c:transfer_select")
+                .setPlaceholder("Choose the new channel owner")
+                .addOptions(options),
+        );
+        return interaction.reply({ content: "Select the new owner of your channel:", components: [row], flags: 64 });
+    }
+
+    if (customId === "j2c:delete") {
+        try {
+            await db.delete(j2cTempChannelsTable).where(eq(j2cTempChannelsTable.channelId, voiceChannel.id));
+            await voiceChannel.delete("J2C: owner deleted channel").catch(() => {});
+            return interaction.reply({ content: "🗑️ Your channel has been deleted.", flags: 64 }).catch(() => {});
+        } catch {
+            return interaction.reply({ content: "❌ Failed to delete channel.", flags: 64 }).catch(() => {});
+        }
+    }
+}
+
+// ── J2C Panel — modal submit handler ─────────────────────────────────────────
+async function handleJ2CModal(interaction) {
+    const { customId, member } = interaction;
+
+    const voiceChannel = member.voice?.channel;
+    if (!voiceChannel) {
+        return interaction.reply({ content: "❌ You are no longer in a voice channel.", flags: 64 });
+    }
+
+    const [temp] = await db.select().from(j2cTempChannelsTable)
+        .where(eq(j2cTempChannelsTable.channelId, voiceChannel.id)).catch(() => [null]);
+
+    if (!temp || temp.ownerId !== interaction.user.id) {
+        return interaction.reply({ content: "❌ You are no longer the owner of this channel.", flags: 64 });
+    }
+
+    if (customId === "j2c:modal:rename") {
+        const newName = interaction.fields.getTextInputValue("j2c_name").trim();
+        if (!newName) return interaction.reply({ content: "❌ Name cannot be empty.", flags: 64 });
+        try {
+            await voiceChannel.setName(newName, "J2C: owner renamed");
+            return interaction.reply({ content: `✅ Channel renamed to **${newName}**.`, flags: 64 });
+        } catch {
+            return interaction.reply({ content: "❌ Failed to rename channel — check my permissions.", flags: 64 });
+        }
+    }
+
+    if (customId === "j2c:modal:limit") {
+        const raw = interaction.fields.getTextInputValue("j2c_limit").trim();
+        const limit = parseInt(raw, 10);
+        if (isNaN(limit) || limit < 0 || limit > 99) {
+            return interaction.reply({ content: "❌ Limit must be a number from 0 (unlimited) to 99.", flags: 64 });
+        }
+        try {
+            await voiceChannel.setUserLimit(limit, "J2C: owner set limit");
+            return interaction.reply({ content: `✅ User limit set to **${limit === 0 ? "unlimited" : limit}**.`, flags: 64 });
+        } catch {
+            return interaction.reply({ content: "❌ Failed to set limit — check my permissions.", flags: 64 });
+        }
+    }
+}
+
+// ── J2C Panel — select menu handler ──────────────────────────────────────────
+async function handleJ2CSelect(interaction) {
+    const { customId, member, guild } = interaction;
+
+    const voiceChannel = member.voice?.channel;
+    if (!voiceChannel) {
+        return interaction.reply({ content: "❌ You are no longer in a voice channel.", flags: 64 });
+    }
+
+    const [temp] = await db.select().from(j2cTempChannelsTable)
+        .where(eq(j2cTempChannelsTable.channelId, voiceChannel.id)).catch(() => [null]);
+
+    if (!temp || temp.ownerId !== interaction.user.id) {
+        return interaction.update({ content: "❌ You are no longer the owner of this channel.", components: [] }).catch(() => {});
+    }
+
+    const targetId = interaction.values[0];
+
+    if (customId === "j2c:kick_select") {
+        const target = voiceChannel.members.get(targetId);
+        if (!target) {
+            return interaction.update({ content: "❌ That member is no longer in your channel.", components: [] });
+        }
+        try {
+            await target.voice.disconnect("J2C: kicked by owner");
+            return interaction.update({ content: `✅ **${target.displayName}** has been disconnected from your channel.`, components: [] });
+        } catch {
+            return interaction.update({ content: "❌ Failed to disconnect that member — check my permissions.", components: [] });
+        }
+    }
+
+    if (customId === "j2c:transfer_select") {
+        if (targetId === interaction.user.id) {
+            return interaction.update({ content: "❌ You cannot transfer ownership to yourself.", components: [] });
+        }
+        try {
+            await db.update(j2cTempChannelsTable)
+                .set({ ownerId: targetId })
+                .where(eq(j2cTempChannelsTable.channelId, voiceChannel.id));
+            return interaction.update({ content: `✅ Channel ownership transferred to <@${targetId}>. They can now use \`/j2cpanel\` to manage it.`, components: [] });
+        } catch {
+            return interaction.update({ content: "❌ Failed to transfer ownership.", components: [] });
+        }
+    }
 }
