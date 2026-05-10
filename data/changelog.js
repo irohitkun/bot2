@@ -14,11 +14,11 @@ export const CHANGELOG = [
         sections: {
             fixed: [
                 "**Join-to-Create voice channels** — the bot was not detecting when users joined a hub channel, so temporary VCs were never created. This is now fixed and J2C works as intended.",
-                "**`/j2cpanel`** — the channel control panel was showing "you must be in a voice channel" even when you were already in your temp VC. Fixed — owners can now rename, lock, kick, transfer, and delete their channel from the panel.",
-                "**`{game}` name template** — if your J2C hub used `{game}` in the name template, it was never replaced with the actual game name. It now correctly shows the user's current game activity (or falls back to their display name if they aren't playing anything).",
-                "**Custom Commands** — `/customcmd add` was crashing with a database error for all servers. The required database table was missing and has now been created.",
-                "**Embed Templates** — `/embedtemplate create` was crashing on open. The popup form contained labels that were too long for Discord to accept. All labels have been shortened and the command works correctly now.",
-                "**AI Assistant** — the AI had no knowledge of Join-to-Create, so asking it how to set up J2C or what `/j2cpanel` does would return wrong or ticket-related information. The AI now knows all J2C commands in detail and will no longer confuse `/j2cpanel` with the ticket panel.",
+                "**`/j2cpanel`** — the panel was saying you must be in a voice channel even when you were already in your temp VC. Fixed — owners can now rename, lock, kick, transfer, and delete their channel.",
+                "**`{game}` name template** — if your J2C hub used `{game}` in the name template, it was never replaced with the actual game name. Now works correctly.",
+                "**Custom Commands** — `/customcmd add` was crashing with a database error for all servers. The required table was missing and has now been created.",
+                "**Embed Templates** — `/embedtemplate create` was crashing on open due to Discord label length limits. Fixed — the popup form now opens correctly.",
+                "**AI Assistant** — the AI now knows all J2C commands in detail and will no longer confuse `/j2cpanel` with the ticket panel when you ask about it.",
             ],
         },
     },
@@ -29,10 +29,10 @@ export const CHANGELOG = [
         color: 0x57f287,
         sections: {
             added: [
-                "**Embed Template System** — create named embed templates with `/embedtemplate create`, reuse them in welcome/leave messages and more. Supports `{user}`, `{user_avatar}`, `{server}`, `{count}` variables.",
+                "**Embed Template System** — create named embed templates with `/embedtemplate create`, reuse them in welcome/leave messages and more.",
                 "**Leave/Goodbye Messages** — configure a dedicated leave channel and message via `/welcome setleave`. Supports embed templates.",
                 "**Verification System** — `/verification setup` posts a button panel; members click to receive a verified role automatically.",
-                "**AntiNuke Protection** — detects mass bans/kicks/channel/role deletions in a rolling time window and fires configured punishment. Includes whitelist support.",
+                "**AntiNuke Protection** — detects mass bans/kicks/channel/role deletions and fires configured punishment. Includes whitelist support.",
                 "**Anonymous Confession System** — `/confession setup` enables anonymous confessions via modal with optional mod review queue.",
                 "**Top.gg Vote Rewards** — `/vote` checks vote status, credits coins + XP, and tracks vote streaks with bonus rewards.",
                 "**Interactive Help Menu** — `/help` now shows a live dropdown that updates in-place with all commands for the selected category.",
@@ -41,12 +41,12 @@ export const CHANGELOG = [
                 "**Changelog System** — `/changelog latest` and `/changelog announce` to share version updates with your community.",
             ],
             changed: [
-                "**Welcome messages** now support embed templates — set one with `/welcome set embed_template:<name>` instead of using the plain-text message.",
+                "**Welcome messages** now support embed templates — set one with `/welcome set embed_template:<name>` instead of plain-text.",
                 "**VC logging** — voice state events (join, leave, move) are now logged to the mod-log channel.",
-                "**Role & channel logging** — role deletes and channel deletes are now logged to the mod-log channel.",
+                "**Role & channel logging** — role and channel deletes are now logged to the mod-log channel.",
             ],
             fixed: [
-                "**No-prefix bug** — the bot owner could use no-prefix commands in any server even if that server had it disabled. Now the guild must have no-prefix mode enabled first.",
+                "**No-prefix bug** — the bot owner could use no-prefix commands in any server even if that server had it disabled.",
                 "**Ticket channel names** changed from `ticket-0001` to `ticket-username` format for easier identification.",
             ],
         },
@@ -58,16 +58,16 @@ export const CHANGELOG = [
         color: 0x5865f2,
         sections: {
             added: [
-                "**`/premiumadmin activate`** — bot owner can now grant Premium to any server manually. Supports permanent (no expiry) for paid customers, or a custom number of days. Includes a `notes` field to log payment details (e.g. UPI transaction ID).",
-                "**`/premiumadmin revoke`** — bot owner can immediately remove Premium from any server with an optional reason. Instantly downgrades the server to free tier.",
-                "**Paid permanent Premium** — servers can now receive lifetime Premium that never expires, activated via `/premiumadmin activate guild_id:... permanent:true`.",
+                "**`/premiumadmin activate`** — bot owner can grant Premium to any server. Supports permanent or day-limited grants.",
+                "**`/premiumadmin revoke`** — bot owner can immediately remove Premium from any server.",
+                "**Paid permanent Premium** — servers can receive lifetime Premium that never expires.",
             ],
             changed: [
-                "**Invite link** — updated to use granular permissions instead of Administrator. Now requests only the specific permissions Crux needs (Kick, Ban, Manage Roles, Manage Messages, Timeout, etc.). Top.gg compliant.",
-                "**`/premiumadmin`** — refactored from a single list command into a full subcommand suite: `list`, `activate`, `revoke`.",
+                "**Invite link** — updated to use granular permissions instead of Administrator. Top.gg compliant.",
+                "**`/premiumadmin`** — refactored into a full subcommand suite: `list`, `activate`, `revoke`.",
             ],
             fixed: [
-                "**No-prefix bot owner bypass** — removed `isBotOwner` shortcut from `canUseNoPrefix()`. Bot owner no longer bypasses no-prefix access controls in other servers.",
+                "**No-prefix bot owner bypass** — bot owner no longer bypasses no-prefix access controls in other servers.",
             ],
         },
     },
@@ -78,21 +78,21 @@ export const CHANGELOG = [
         color: 0xf1c40f,
         sections: {
             added: [
-                "**Vote-Based Premium** — server owners can unlock Premium for free by voting for Crux on top.gg. One vote = 12 hours of Premium, auto-renewable. Run `/premium vote` after voting to activate instantly.",
-                "**30-Day Free Trial** — server owners can activate a one-time 30-day Premium trial themselves with `/freetrial`. No bot owner involvement required.",
-                "**Self-service premium** — all premium activation and trial commands are now fully controlled by the server owner. Zero bot owner dependency.",
+                "**Vote-Based Premium** — vote for Crux on Top.gg to unlock 12 hours of Premium for your server. Run `/premium vote` after voting.",
+                "**30-Day Free Trial** — activate a one-time 30-day trial with `/freetrial`. No bot owner needed.",
+                "**Self-service premium** — all premium activation is now controlled by the server owner.",
             ],
             changed: [
-                "**`/premium`** — replaced bot-owner-only `activate`/`deactivate`/`list` subcommands with a new `vote` subcommand. Server owners activate premium themselves.",
-                "**`/freetrial`** — now usable by the server owner directly in their own server. Trial extended from 7 days to 30 days.",
-                "**Premium denied messages** — now tell users to vote on top.gg or use `/freetrial` instead of contacting the bot owner.",
+                "**`/premium`** — now has a `vote` subcommand. Server owners activate premium themselves.",
+                "**`/freetrial`** — now usable by the server owner directly. Trial extended from 7 to 30 days.",
+                "**Premium denied messages** — now direct users to vote on Top.gg or use `/freetrial`.",
             ],
             fixed: [
-                "**Import crash on startup** — removed dead `requireAdmin` imports in `antinuke.js` and `confession.js` that caused the bot to fail to start.",
-                "**Changelog subcommand crash** — `setDefaultMemberPermissions` was applied to a subcommand instead of the main command builder.",
-                "**Voice state event crash** — `cleanupOrphanedJ2CChannels` was missing from `voiceStateUpdate.js` exports.",
-                "**Prefix help crash** — `getPrefixHelpCategories` (nonexistent) replaced with the correct `helpCategories` export.",
-                "**`/noprefix`** — removed `isBotOwner` fallback; guild owner check is now the sole gate as intended.",
+                "**Import crash on startup** — dead imports in antinuke.js and confession.js caused the bot to fail to start.",
+                "**Changelog subcommand crash** — permissions were applied to the wrong builder.",
+                "**Voice state event crash** — missing export in voiceStateUpdate.js.",
+                "**Prefix help crash** — nonexistent function call replaced with correct export.",
+                "**`/noprefix`** — guild owner check is now the sole gate as intended.",
             ],
         },
     },
@@ -132,7 +132,7 @@ export const CHANGELOG = [
                 "Custom commands (Premium).",
             ],
         },
-    },
+    }
 ];
 
 /** Returns the latest version entry */
