@@ -168,7 +168,7 @@ export async function execute(interaction) {
     }
 }
 
-/** Build the 5-field embed template modal */
+/** Build the 5-field embed template modal (all labels <= 45 chars) */
 function buildModal(customId, title, existing) {
     return new ModalBuilder()
         .setCustomId(customId)
@@ -186,7 +186,7 @@ function buildModal(customId, title, existing) {
             new ActionRowBuilder().addComponents(
                 new TextInputBuilder()
                     .setCustomId("embed_description")
-                    .setLabel("Description (supports {user}, {server}, {count})")
+                    .setLabel("Description ({user}, {server}, {count})")
                     .setStyle(TextInputStyle.Paragraph)
                     .setMaxLength(4000)
                     .setRequired(true)
@@ -195,7 +195,7 @@ function buildModal(customId, title, existing) {
             new ActionRowBuilder().addComponents(
                 new TextInputBuilder()
                     .setCustomId("embed_color")
-                    .setLabel("Color (hex, e.g. FF5733 — leave blank for server color)")
+                    .setLabel("Color hex (blank = use server color)")
                     .setStyle(TextInputStyle.Short)
                     .setMaxLength(7)
                     .setRequired(false)
@@ -213,7 +213,7 @@ function buildModal(customId, title, existing) {
             new ActionRowBuilder().addComponents(
                 new TextInputBuilder()
                     .setCustomId("embed_thumbnail")
-                    .setLabel("Thumbnail URL ({user_avatar} or {server_icon} or URL)")
+                    .setLabel("Thumbnail ({user_avatar}, {server_icon}, URL)")
                     .setStyle(TextInputStyle.Short)
                     .setMaxLength(500)
                     .setRequired(false)
