@@ -3,6 +3,7 @@ import { Client, GatewayIntentBits, Partials, Collection } from "discord.js";
 import { createServer, get as httpGet } from "http";
 import { loadCommands } from "./utils/loadCommands.js";
 import { loadEvents } from "./utils/loadEvents.js";
+import { runMigrations } from "./db/migrate.js";
 
 // ── Global crash protection ───────────────────────────────────────────────────
 // Prevents any single unhandled rejection or exception from killing the process.
@@ -90,6 +91,7 @@ async function main() {
         console.warn("DISCORD_BOT_TOKEN is not set. Add it to your environment, then restart the bot.");
         return;
     }
+    await runMigrations();
     await loadCommands(commands);
     await loadEvents(client);
     await client.login(process.env.DISCORD_BOT_TOKEN);
