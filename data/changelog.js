@@ -7,6 +7,22 @@
  */
 export const CHANGELOG = [
     {
+        version: "2.6",
+        title: "Bug Fixes & AI Improvements",
+        date: "2026-05-10",
+        color: 0xed4245,
+        sections: {
+            fixed: [
+                "**Join-to-Create voice channels** — the bot was not detecting when users joined a hub channel, so temporary VCs were never created. This is now fixed and J2C works as intended.",
+                "**`/j2cpanel`** — the channel control panel was showing "you must be in a voice channel" even when you were already in your temp VC. Fixed — owners can now rename, lock, kick, transfer, and delete their channel from the panel.",
+                "**`{game}` name template** — if your J2C hub used `{game}` in the name template, it was never replaced with the actual game name. It now correctly shows the user's current game activity (or falls back to their display name if they aren't playing anything).",
+                "**Custom Commands** — `/customcmd add` was crashing with a database error for all servers. The required database table was missing and has now been created.",
+                "**Embed Templates** — `/embedtemplate create` was crashing on open. The popup form contained labels that were too long for Discord to accept. All labels have been shortened and the command works correctly now.",
+                "**AI Assistant** — the AI had no knowledge of Join-to-Create, so asking it how to set up J2C or what `/j2cpanel` does would return wrong or ticket-related information. The AI now knows all J2C commands in detail and will no longer confuse `/j2cpanel` with the ticket panel.",
+            ],
+        },
+    },
+    {
         version: "2.5",
         title: "The Big Systems Update",
         date: "2026-05-09",
