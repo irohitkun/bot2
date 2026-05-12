@@ -201,7 +201,7 @@ export function premiumDeniedEmbed(featureName) {
             )
             .addFields({
                 name: "🗳️ How to get Premium — Free!",
-                value: "Vote for Crux on top.gg and run `/premium vote` to unlock **12 hours of Premium** instantly.\nOr use `/freetrial` for a free 30-day trial (server owner only, one per server).",
+                value: "Vote for Crux on Top.gg and run `/vote check` to unlock **16 hours of Premium** for any server of your choice — automatically!\nOr use `/freetrial` for a free 30-day trial (server owner only, one per server).",
                 inline: false,
             });
     } else {
@@ -209,8 +209,8 @@ export function premiumDeniedEmbed(featureName) {
             `**${featureName}** is a Premium feature.\n\n` +
             `Premium unlocks AutoMod, server logs, custom prefix, embed builder, ` +
             `unlimited reaction roles, giveaway reroll, multiple ticket panels, no-prefix mode, and more.\n\n` +
-            `🗳️ **Get it free:** Vote for Crux on top.gg then run \`/premium vote\`.\n` +
-            `Or use \`/freetrial\` for a free 30-day trial (server owner only).`
+            `🗳️ **Get it free:** Vote for Crux on Top.gg — each vote gives **16 hours of Premium** for a server of your choice.\n` +
+            `Run \`/vote check\` after voting or use \`/freetrial\` for a free 30-day trial (server owner only).`
         );
     }
 

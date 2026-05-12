@@ -37,6 +37,7 @@ export const premiumGuildsTable = pgTable("premium_guilds", {
     isTrial: boolean("is_trial").notNull().default(false),
     reminderSent: boolean("reminder_sent").notNull().default(false),
     notifyUserId: text("notify_user_id"),
+    activationMethod: text("activation_method").notNull().default("admin"),
 });
 
 export const automodSettingsTable = pgTable("automod_settings", {
@@ -293,7 +294,6 @@ export const customCommandsTable = pgTable("custom_commands", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [unique("custom_cmds_guild_name_unique").on(t.guildId, t.name)]);
 
-// ── Verification ──────────────────────────────────────────────────────────────
 export const verificationSettingsTable = pgTable("verification_settings", {
     guildId: text("guild_id").primaryKey(),
     enabled: boolean("enabled").notNull().default(false),
@@ -303,7 +303,6 @@ export const verificationSettingsTable = pgTable("verification_settings", {
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// ── AntiNuke ──────────────────────────────────────────────────────────────────
 export const antinukeSettingsTable = pgTable("antinuke_settings", {
     guildId: text("guild_id").primaryKey(),
     enabled: boolean("enabled").notNull().default(false),
@@ -323,7 +322,6 @@ export const antinukeWhitelistTable = pgTable("antinuke_whitelist", {
     addedAt: timestamp("added_at").notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.guildId, t.userId] })]);
 
-// ── Confessions ───────────────────────────────────────────────────────────────
 export const confessionSettingsTable = pgTable("confession_settings", {
     guildId: text("guild_id").primaryKey(),
     enabled: boolean("enabled").notNull().default(false),
@@ -343,7 +341,6 @@ export const confessionsTable = pgTable("confessions", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// ── Top.gg Votes ──────────────────────────────────────────────────────────────
 export const voteRecordsTable = pgTable("vote_records", {
     userId: text("user_id").primaryKey(),
     lastVotedAt: timestamp("last_voted_at").notNull().defaultNow(),
@@ -351,9 +348,6 @@ export const voteRecordsTable = pgTable("vote_records", {
     totalVotes: integer("total_votes").notNull().default(0),
 });
 
-// ── Embed Templates ───────────────────────────────────────────────────────────
-// Named, reusable embed configs per guild. Referenced by welcome, leave, tickets, etc.
-// Supports variables: {user}, {user.name}, {user_avatar}, {server}, {server_icon}, {count}
 export const embedTemplatesTable = pgTable("embed_templates", {
     id: serial("id").primaryKey(),
     guildId: text("guild_id").notNull(),
@@ -371,3 +365,47 @@ export const embedTemplatesTable = pgTable("embed_templates", {
     createdBy: text("created_by").notNull(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [unique("embed_templates_guild_name_unique").on(t.guildId, t.name)]);
+
+// ── Temp Roles ────────────────────────────────────────────────────────────────
+export const tempRolesTable = pgTable("temp_roles", {
+    id: serial("id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    userId: text("user_id").notNull(),
+    roleId: text("role_id").notNull(),
+    moderatorId: text("moderator_id").notNull(),
+    reason: text("reason").notNull().default("No reason provided"),
+    expiresAt: timestamp("expires_at").notNull(),
+    removed: boolean("removed").notNull().default(false),
+    removedAt: timestamp("removed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ── Jail System ───────────────────────────────────────────────────────────────
+export const jailSettingsTable = pgTable("jail_settings", {
+    guildId: text("guild_id").primaryKey(),
+    jailRoleId: text("jail_role_id"),
+    jailChannelId: text("jail_channel_id"),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const jailRecordsTable = pgTable("jail_records", {
+    id: serial("id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    userId: text("user_id").notNull(),
+    userTag: text("user_tag").notNull(),
+    moderatorId: text("moderator_id").notNull(),
+    moderatorTag: text("moderator_tag").notNull(),
+    reason: text("reason").notNull().default("No reason provided"),
+    savedRoles: text("saved_roles").notNull().default(""),
+    jailedAt: timestamp("jailed_at").notNull().defaultNow(),
+    releasedAt: timestamp("released_at"),
+    releasedBy: text("released_by"),
+    active: boolean("active").notNull().default(true),
+});
+
+// ── Vote Opt-In Reminders ─────────────────────────────────────────────────────
+export const voteReminderOptInTable = pgTable("vote_reminder_opt_in", {
+    userId: text("user_id").primaryKey(),
+    optedIn: boolean("opted_in").notNull().default(true),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});

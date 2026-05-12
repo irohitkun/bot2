@@ -1,12 +1,13 @@
 import "dotenv/config";
 import { Client, GatewayIntentBits, Partials, Collection } from "discord.js";
-import { createServer, get as httpGet } from "http";
+import { get as httpGet } from "http";
+import express from "express";
 import { loadCommands } from "./utils/loadCommands.js";
 import { loadEvents } from "./utils/loadEvents.js";
 import { runMigrations } from "./db/migrate.js";
+import { registerTopggWebhook } from "./utils/topggWebhook.js";
 
 // ── Global crash protection ───────────────────────────────────────────────────
-// Prevents any single unhandled rejection or exception from killing the process.
 process.on("unhandledRejection", (reason) => {
     console.error("[Process] Unhandled promise rejection:", reason);
 });
@@ -31,24 +32,26 @@ export const client = new Client({
 
 export const commands = new Collection();
 
-function startKeepAliveServer() {
+function startHttpServer() {
     const port = parseInt(process.env.PORT ?? "3000", 10);
-    const server = createServer((req, res) => {
-        if (req.url === "/ping" || req.url === "/") {
-            res.writeHead(200, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ status: "ok", bot: client.user?.tag ?? "starting", uptime: process.uptime() }));
-        } else {
-            res.writeHead(404);
-            res.end("Not found");
-        }
+
+    const app = express();
+    app.use(express.json());
+
+    // ── Health check & keep-alive ─────────────────────────────────────────────
+    app.get(["/", "/ping"], (req, res) => {
+        res.json({ status: "ok", bot: client.user?.tag ?? "starting", uptime: process.uptime() });
+    });
+
+    // ── Top.gg vote webhook ───────────────────────────────────────────────────
+    registerTopggWebhook(app, client);
+
+    const server = app.listen(port, "0.0.0.0", () => {
+        console.log(`HTTP server running on port ${port}`);
     });
 
     server.on("error", (err) => {
-        console.warn("[Keep-alive] Server error:", err.message);
-    });
-
-    server.listen(port, "0.0.0.0", () => {
-        console.log(`Keep-alive server running on port ${port}`);
+        console.warn("[HTTP] Server error:", err.message);
     });
 
     // Self-ping every 4 minutes to prevent host from sleeping the process
@@ -86,7 +89,7 @@ client.on("shardResume", (id, replayed) => {
 });
 
 async function main() {
-    startKeepAliveServer();
+    startHttpServer();
     if (!process.env.DISCORD_BOT_TOKEN) {
         console.warn("DISCORD_BOT_TOKEN is not set. Add it to your environment, then restart the bot.");
         return;

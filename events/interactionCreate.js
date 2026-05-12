@@ -8,8 +8,10 @@ import { db } from "../db/index.js";
 import {
     ticketSettingsTable, ticketsTable, verificationSettingsTable,
     confessionSettingsTable, confessionsTable, j2cTempChannelsTable,
+    premiumGuildsTable,
 } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
+import { invalidatePremiumCache } from "../utils/permissions.js";
 import { getGuildStyle } from "../utils/guildStyle.js";
 import { fetchAllMessages } from "../utils/fetchAllMessages.js";
 import { executePlanByToken, peekPendingPlan, consumePendingPlan, logAIRun } from "../utils/aiAssistant.js";
@@ -81,6 +83,9 @@ export async function execute(interaction) {
 
     // ── Select menus ─────────────────────────────────────────────────────────
     if (interaction.isStringSelectMenu()) {
+        if (interaction.customId.startsWith("vote:server:")) {
+            return handleVoteServerPick(interaction);
+        }
         if (interaction.customId === "help:category") {
             const key = interaction.values[0];
             const { color } = await getGuildStyle(interaction.guild.id);
@@ -648,4 +653,65 @@ async function handleJ2CSelect(interaction) {
             return interaction.update({ content: "❌ Failed to transfer ownership.", components: [] });
         }
     }
+}
+
+// ── Vote server-picker handler ────────────────────────────────────────────────
+async function handleVoteServerPick(interaction) {
+    const parts = interaction.customId.split(":");
+    const userId = parts[2];
+    const expiresAtMs = parseInt(parts[3], 10);
+
+    if (interaction.user.id !== userId) {
+        return interaction.reply({ content: "❌ This menu is not for you.", flags: 64 });
+    }
+
+    const expiresAt = new Date(expiresAtMs);
+    if (Date.now() > expiresAtMs + 5 * 60 * 1000) {
+        return interaction.reply({ content: "❌ This selection has expired. Vote again and pick a server right away!", flags: 64 });
+    }
+
+    const guildId = interaction.values[0];
+    const guild = interaction.client.guilds.cache.get(guildId);
+    const guildName = guild?.name ?? guildId;
+
+    await db.insert(premiumGuildsTable).values({
+        guildId,
+        activatedBy: userId,
+        activatedByTag: interaction.user.tag,
+        expiresAt,
+        tier: "premium",
+        isTrial: false,
+        reminderSent: false,
+        notifyUserId: userId,
+        activationMethod: "vote",
+        notes: `Vote-based premium (16h) — server picker by ${interaction.user.tag}`,
+    }).onConflictDoUpdate({
+        target: premiumGuildsTable.guildId,
+        set: {
+            activatedBy: userId,
+            activatedByTag: interaction.user.tag,
+            activatedAt: new Date(),
+            expiresAt,
+            tier: "premium",
+            isTrial: false,
+            reminderSent: false,
+            notifyUserId: userId,
+            activationMethod: "vote",
+            notes: `Vote-based premium (16h) — server picker by ${interaction.user.tag}`,
+        },
+    });
+    invalidatePremiumCache(guildId);
+
+    await interaction.update({
+        embeds: [new EmbedBuilder()
+            .setColor(0xf1c40f)
+            .setTitle("✅ Premium Applied!")
+            .setDescription(
+                `**${guildName}** now has **16 hours of Premium**!\n\n` +
+                `All premium features are now unlocked for that server.\n\n` +
+                `Premium expires <t:${Math.floor(expiresAt.getTime() / 1000)}:R>. Vote again in 12 hours to renew!`
+            )
+            .setTimestamp()],
+        components: [],
+    });
 }

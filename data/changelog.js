@@ -7,6 +7,28 @@
  */
 export const CHANGELOG = [
     {
+        version: "2.7",
+        title: "Jail, TempRole, Mass Timeout & Live Voting",
+        date: "2026-05-12",
+        color: 0x5865f2,
+        sections: {
+            added: [
+                "**Jail System** — `/jail setup` to configure, `/jail member` to isolate members (removes all roles), `/jail release` to restore roles automatically.",
+                "**TempRole** — `/temprole @user <role> <duration>` temporarily assigns a role and auto-removes it when the timer expires. Survives bot restarts.",
+                "**Mass Timeout** — `/masstimeout` times out all humans or members with a specific role in one command.",
+                "**Top.gg Vote Webhook** — votes are now received live. You're automatically DM'd when your vote is registered; pick which server gets **16 hours of Premium**.",
+                "**Vote Reminders** — run `/vote remind` to opt in to DM reminders when your 12-hour cooldown is up.",
+                "**Server Picker for Votes** — when you're in multiple servers with Crux, each vote shows a dropdown to choose which server gets Premium.",
+                "**Prefix help interactive menu** — `%help` now shows the same live dropdown as `/help` (select categories in-place, no page reloads).",
+            ],
+            changed: [
+                "**Vote Premium duration** — increased from 12 hours to **16 hours** per vote.",
+                "**Premium expiry DMs** — renewal instructions now match how you activated (vote, trial, or admin grant) instead of a generic message.",
+                "**Premium denied embeds** — upsell now correctly mentions 16h and the `/vote check` flow.",
+            ],
+        },
+    },
+    {
         version: "2.6",
         title: "Bug Fixes & AI Improvements",
         date: "2026-05-10",
