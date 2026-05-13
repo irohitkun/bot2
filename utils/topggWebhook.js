@@ -12,9 +12,12 @@ import { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMe
 
   export function registerTopggWebhook(app, client) {
       app.post("/topgg/webhook", async (req, res) => {
+          console.log("[TopGG] INCOMING REQUEST to /topgg/webhook");
+          console.log("[TopGG] Headers:", JSON.stringify(req.headers));
+          console.log("[TopGG] Body:", JSON.stringify(req.body));
           const secret = process.env.TOPGG_WEBHOOK_SECRET;
           if (secret && req.headers.authorization !== secret) {
-              console.warn("[TopGG] Rejected webhook — bad Authorization header");
+              console.warn("[TopGG] REJECTED — expected auth but got:", req.headers.authorization);
               return res.status(401).send("Unauthorized");
           }
           res.sendStatus(200);
