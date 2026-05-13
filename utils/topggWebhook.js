@@ -36,12 +36,16 @@ import { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMe
               console.warn("[TopGG] Missing userId in webhook body:", JSON.stringify(req.body));
               return;
           }
+          if (type === "test") {
+              console.log(`[TopGG] ✅ Test ping received — webhook connectivity confirmed! userId: ${userId}`);
+              return; // test pings don't process a real vote
+          }
           if (type !== "upvote") {
-              console.log(`[TopGG] Ignoring event type: ${type}`);
+              console.log(`[TopGG] Ignoring unknown event type: ${type}`);
               return;
           }
 
-          console.log(`[TopGG] ✅ Valid upvote from user ${userId}`);
+          console.log(`[TopGG] ✅ Real upvote received from user ${userId} — processing...`);
           await processVote(client, userId, !!isWeekend);
       });
 
