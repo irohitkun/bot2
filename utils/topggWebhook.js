@@ -10,53 +10,47 @@ import { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMe
   const VOTE_PREMIUM_HOURS = 16;
   const VOTE_PREMIUM_MS = VOTE_PREMIUM_HOURS * 60 * 60 * 1000;
 
-  /**
-   * Register the Top.gg vote webhook on an Express app.
-   * Top.gg sends a POST with JSON body: { user: "<userId>", type: "upvote", isWeekend?: boolean }
-   */
   export function registerTopggWebhook(app, client) {
-      app.post("/topgg/webhook", async (req, res) => {
-          // ── Auth check ───────────────────────────────────────────────────────
+      app.post("/topgg/webhook", (req, res) => {
+          // ── Respond IMMEDIATELY so Top.gg never times out ──────────────────────
+          res.status(200).end();
+
+          // ── Validate auth (after responding) ───────────────────────────────────
           const secret = process.env.TOPGG_WEBHOOK_SECRET;
-          const incomingAuth = req.headers?.authorization ?? req.headers?.["x-topgg-authorization"] ?? "";
-          if (secret && incomingAuth !== secret) {
-              console.warn(`[TopGG] Auth mismatch. Expected secret set, got header: ${incomingAuth.slice(0, 20)}...`);
-              return res.status(401).json({ error: "Unauthorized" });
-          }
-          if (!secret) {
-              console.warn("[TopGG] TOPGG_WEBHOOK_SECRET is not set — accepting vote without auth verification!");
-          }
-
-          // Acknowledge immediately so Top.gg doesn't retry
-          res.status(200).json({ ok: true });
-
-          // ── Parse body ───────────────────────────────────────────────────────
-          const { user: userId, type, isWeekend } = req.body ?? {};
-          if (!userId) {
-              console.warn("[TopGG] Missing userId in webhook body:", JSON.stringify(req.body));
+          const incomingAuth = (req.headers?.authorization ?? req.headers?.["x-topgg-authorization"] ?? "").trim();
+          if (secret && incomingAuth !== secret.trim()) {
+              console.warn(`[TopGG] Auth rejected — header: "${incomingAuth.slice(0, 30)}"`);
               return;
           }
+
+          // ── Parse body ─────────────────────────────────────────────────────────
+          const { user: userId, type } = req.body ?? {};
+          console.log(`[TopGG] Webhook received — type: ${type}, userId: ${userId}`);
+
           if (type === "test") {
-              console.log(`[TopGG] ✅ Test ping received — webhook connectivity confirmed! userId: ${userId}`);
-              return; // test pings don't process a real vote
+              console.log("[TopGG] ✅ Test ping OK — webhook is connected and reachable!");
+              return;
           }
-          if (type !== "upvote") {
-              console.log(`[TopGG] Ignoring unknown event type: ${type}`);
+          if (type !== "upvote" || !userId) {
+              console.log(`[TopGG] Ignored — type: ${type}, userId: ${userId}`);
               return;
           }
 
-          console.log(`[TopGG] ✅ Real upvote received from user ${userId} — processing...`);
-          await processVote(client, userId, !!isWeekend);
+          // ── Process vote async (fire and forget — response already sent) ───────
+          processVote(client, userId).catch(err => {
+              console.error("[TopGG] Error processing vote:", err);
+          });
       });
 
       console.log("[TopGG Webhook] Listening on POST /topgg/webhook");
   }
 
-  async function processVote(client, userId, isWeekend) {
+  async function processVote(client, userId) {
       const botId = client.user.id;
       const voteUrl = `https://top.gg/bot/${botId}/vote`;
+      console.log(`[TopGG] Processing vote for user ${userId}...`);
 
-      // ── 1. Update vote record ──────────────────────────────────────────────
+      // ── 1. Update vote record ──────────────────────────────────────────────────
       const [existing] = await db.select().from(voteRecordsTable).where(eq(voteRecordsTable.userId, userId));
       const streak = existing ? (existing.voteStreak ?? 0) + 1 : 1;
       const total = existing ? (existing.totalVotes ?? 0) + 1 : 1;
@@ -68,7 +62,7 @@ import { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMe
               set: { lastVotedAt: new Date(), voteStreak: streak, totalVotes: total },
           });
 
-      // ── 2. Credit coins + XP ────────────────────────────────────────────
+      // ── 2. Credit coins + XP ───────────────────────────────────────────────────
       const coinsEarned = VOTE_COIN_REWARD + streak * VOTE_STREAK_BONUS;
       try {
           await db.update(memberStatsTable).set({
@@ -76,11 +70,9 @@ import { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMe
               xp: drizzleSql`${memberStatsTable.xp} + ${VOTE_XP_REWARD}`,
               updatedAt: new Date(),
           }).where(eq(memberStatsTable.userId, userId));
-      } catch (e) {
-          console.warn("[TopGG] Coins/XP credit failed:", e.message);
-      }
+      } catch (e) { console.warn("[TopGG] Coins/XP credit failed:", e.message); }
 
-      // ── 3. Resolve mutual guilds ────────────────────────────────────────────
+      // ── 3. Mutual guilds ───────────────────────────────────────────────────────
       const mutualGuilds = [];
       for (const guild of client.guilds.cache.values()) {
           const member = guild.members.cache.get(userId)
@@ -89,7 +81,7 @@ import { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMe
       }
       const expiresAt = new Date(Date.now() + VOTE_PREMIUM_MS);
 
-      // ── 4. DM voter ─────────────────────────────────────────────────────────
+      // ── 4. DM voter ────────────────────────────────────────────────────────────
       const user = await client.users.fetch(userId).catch(() => null);
       if (user) {
           try {
@@ -97,22 +89,18 @@ import { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMe
                   await user.send({ embeds: [new EmbedBuilder()
                       .setColor(0xf1c40f).setTitle("✅ Thanks for Voting!")
                       .setURL(voteUrl)
-                      .setDescription(`**Rewards:**\n🪙 ${coinsEarned} coins  •  ⭐ ${VOTE_XP_REWARD} XP  •  🏆 ${VOTE_PREMIUM_HOURS}h Premium\n\n` +
-                          `You're not in any server with Crux. Join one, then run \`/vote check\`.\n\n` +
-                          `🔥 Streak: **${streak}**  |  Total: **${total}**`).setTimestamp()] }).catch(() => {});
-
+                      .setDescription(`**Rewards:**\n🪙 ${coinsEarned} coins  •  ⭐ ${VOTE_XP_REWARD} XP  •  🏆 ${VOTE_PREMIUM_HOURS}h Premium\n\nYou're not in any server with Crux. Join one, then run \`/vote check\`.\n\n🔥 Streak: **${streak}**  |  Total: **${total}**`)
+                      .setTimestamp()] }).catch(() => {});
               } else if (mutualGuilds.length === 1) {
                   await activatePremium(mutualGuilds[0].id, userId, user.tag, expiresAt);
                   await user.send({ embeds: [new EmbedBuilder()
                       .setColor(0xf1c40f).setTitle("✅ Thanks for Voting!")
                       .setURL(voteUrl)
-                      .setDescription(`**Rewards:**\n🪙 ${coinsEarned} coins  •  ⭐ ${VOTE_XP_REWARD} XP\n🏆 **${VOTE_PREMIUM_HOURS}h Premium** → applied to **${mutualGuilds[0].name}**!\n\n` +
-                          `Run \`/premium status\` to confirm.\n` +
-                          `🔥 Streak: **${streak}**  |  Total: **${total}**  |  Vote again in 12h!`)
-                          .addFields({ name: "Premium Expires", value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, inline: true }).setTimestamp()] }).catch(() => {});
-
+                      .setDescription(`**Rewards:**\n🪙 ${coinsEarned} coins  •  ⭐ ${VOTE_XP_REWARD} XP\n🏆 **${VOTE_PREMIUM_HOURS}h Premium** → applied to **${mutualGuilds[0].name}**!\n\nRun \`/premium status\` to confirm.\n🔥 Streak: **${streak}**  |  Total: **${total}**`)
+                      .addFields({ name: "Premium Expires", value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, inline: true })
+                      .setTimestamp()] }).catch(() => {});
               } else {
-                  const options = mutualGuilds.slice(0, 25).map((g) =>
+                  const options = mutualGuilds.slice(0, 25).map(g =>
                       new StringSelectMenuOptionBuilder().setLabel(g.name.slice(0, 100)).setValue(g.id).setDescription(`Give ${VOTE_PREMIUM_HOURS}h Premium to this server`)
                   );
                   const menu = new StringSelectMenuBuilder()
@@ -122,10 +110,8 @@ import { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMe
                   await user.send({
                       embeds: [new EmbedBuilder().setColor(0xf1c40f).setTitle("✅ Thanks for Voting! Pick Your Server")
                           .setURL(voteUrl)
-                          .setDescription(`**Rewards:**\n🪙 ${coinsEarned} coins  •  ⭐ ${VOTE_XP_REWARD} XP\n🏆 **${VOTE_PREMIUM_HOURS}h Premium** — you're in **${mutualGuilds.length}** servers. Pick one below!\n\n` +
-                              `After selecting, run \`/premium status\` to confirm.\n` +
-                              `🔥 Streak: **${streak}**  |  Total: **${total}**`)
-                              .setFooter({ text: "Selection expires in 5 minutes" }).setTimestamp()],
+                          .setDescription(`**Rewards:**\n🪙 ${coinsEarned} coins  •  ⭐ ${VOTE_XP_REWARD} XP\n🏆 **${VOTE_PREMIUM_HOURS}h Premium** — you're in **${mutualGuilds.length}** servers. Pick one!\n\nAfter picking, run \`/premium status\` to confirm.\n🔥 Streak: **${streak}**  |  Total: **${total}**`)
+                          .setFooter({ text: "Selection expires in 5 minutes" }).setTimestamp()],
                       components: [new ActionRowBuilder().addComponents(menu)],
                   }).catch(() => {});
               }
@@ -138,15 +124,14 @@ import { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMe
           } catch {}
       }
 
-      // ── 5. Vote log channel + owner DMs ──────────────────────────────────────
+      // ── 5. Vote log channel + owner DMs ───────────────────────────────────────
       const logEmbed = new EmbedBuilder().setColor(0x5865f2).setTitle("🗳️ New Vote!")
           .addFields(
               { name: "User", value: user ? `${user.tag} (<@${userId}>)` : userId, inline: true },
-              { name: "Weekend", value: isWeekend ? "✅ Yes" : "No", inline: true },
               { name: "Streak", value: `🔥 ${streak}`, inline: true },
               { name: "Total Votes", value: `${total}`, inline: true },
               { name: "Coins Earned", value: `🪙 ${coinsEarned}`, inline: true },
-              { name: "Server Premium", value: mutualGuilds.length > 0 ? `Offered to ${mutualGuilds.length} guild(s)` : "No shared servers", inline: false },
+              { name: "Server Premium", value: mutualGuilds.length > 0 ? `Offered to ${mutualGuilds.length} guild(s): ${mutualGuilds.map(g => g.name).join(", ").slice(0, 200)}` : "No shared servers", inline: false },
           ).setTimestamp();
 
       const logChannelId = process.env.VOTE_LOG_CHANNEL_ID;
@@ -155,40 +140,34 @@ import { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMe
               const ch = await client.channels.fetch(logChannelId).catch(() => null);
               if (ch?.isTextBased()) {
                   await ch.send({ embeds: [logEmbed] });
-                  console.log(`[TopGG] Vote log sent to channel ${logChannelId}`);
+                  console.log(`[TopGG] Vote log sent to #${ch.name}`);
               } else {
-                  console.warn(`[TopGG] VOTE_LOG_CHANNEL_ID ${logChannelId} is not a text channel`);
+                  console.warn(`[TopGG] Channel ${logChannelId} not found or not text-based`);
               }
-          } catch (e) {
-              console.error(`[TopGG] Failed to send vote log to channel ${logChannelId}:`, e.message);
-          }
-      } else {
-          console.log("[TopGG] VOTE_LOG_CHANNEL_ID not set — skipping channel log");
+          } catch (e) { console.error("[TopGG] Vote log channel error:", e.message); }
       }
 
       const ownerIds = [...new Set([...(process.env.BOT_OWNERS ?? "").split(",").map(s => s.trim()).filter(Boolean), "1298631508533313536"])];
       for (const ownerId of ownerIds) {
           if (ownerId === userId) continue;
           try { const owner = await client.users.fetch(ownerId); await owner.send({ embeds: [logEmbed] }); }
-          catch (e) { console.warn(`[TopGG] Could not DM owner ${ownerId}:`, e.message); }
+          catch {}
       }
 
-      console.log(`[TopGG] Vote fully processed for ${userId}`);
+      console.log(`[TopGG] ✅ Vote fully processed for ${userId} (streak: ${streak}, total: ${total})`);
   }
 
   async function activatePremium(guildId, userId, userTag, expiresAt) {
       await db.insert(premiumGuildsTable).values({
           guildId, activatedBy: userId, activatedByTag: userTag, expiresAt,
           tier: "premium", isTrial: false, reminderSent: false, notifyUserId: userId,
-          activationMethod: "vote",
-          notes: `Vote — ${VOTE_PREMIUM_HOURS}h premium granted`,
+          activationMethod: "vote", notes: `Vote — ${VOTE_PREMIUM_HOURS}h premium`,
       }).onConflictDoUpdate({
           target: premiumGuildsTable.guildId,
           set: {
               activatedBy: userId, activatedByTag: userTag, activatedAt: new Date(), expiresAt,
               tier: "premium", isTrial: false, reminderSent: false, notifyUserId: userId,
-              activationMethod: "vote",
-              notes: `Vote — ${VOTE_PREMIUM_HOURS}h premium granted`,
+              activationMethod: "vote", notes: `Vote — ${VOTE_PREMIUM_HOURS}h premium`,
           },
       });
       invalidatePremiumCache(guildId);
