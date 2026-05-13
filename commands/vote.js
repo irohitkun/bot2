@@ -4,6 +4,7 @@ import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, But
   import { getGuildStyle } from "../utils/guildStyle.js";
   import { invalidatePremiumCache } from "../utils/permissions.js";
   import { TOPGG_URL } from "../config/constants.js";
+import { scheduleVoteReminder } from "../utils/voteReminder.js";
 
   const VOTE_COIN_REWARD = 200;
   const VOTE_XP_REWARD = 100;
@@ -206,7 +207,8 @@ import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, But
           .setFooter({ text: "Selection expires in 5 minutes" })
           .setTimestamp();
 
-      await interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
+      scheduleVoteReminder(interaction.client, userId, newStreak);
+        await interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
   }
 
   async function handleRemind(interaction) {
