@@ -2,6 +2,9 @@ import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from "discord.
 import { db, serverCustomizationTable } from "../db/index.js";
 import { eq } from "drizzle-orm";
 import { getGuildStyle, invalidateStyleCache, hexToInt } from "../utils/guildStyle.js";
+import { client } from "../index.js";
+
+const BOT_OWNER_IDS = process.env.BOT_OWNERS?.split(",").map((id) => id.trim()).filter(Boolean) ?? [];
 
 export const data = new SlashCommandBuilder()
     .setName("customize")
@@ -28,6 +31,11 @@ export const data = new SlashCommandBuilder()
             .addStringOption((opt) =>
                 opt.setName("name").setDescription("Nickname, or 'reset' to remove").setRequired(true).setMaxLength(32)))
     .addSubcommand((sub) =>
+        sub.setName("avatar")
+            .setDescription("Change the bot's global profile picture (Bot Owner only)")
+            .addStringOption((opt) =>
+                opt.setName("url").setDescription("Image URL (https://...) — PNG, JPG, GIF supported").setRequired(true)))
+    .addSubcommand((sub) =>
         sub.setName("status")
             .setDescription("View all current customization and server settings"))
     .addSubcommand((sub) =>
@@ -37,6 +45,35 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
     const guildId = interaction.guild.id;
     const sub = interaction.options.getSubcommand();
+
+    // ── Bot-owner-only subcommands ─────────────────────────────────────────────
+    if (sub === "avatar") {
+        if (!BOT_OWNER_IDS.includes(interaction.user.id)) {
+            return interaction.reply({ content: "❌ Only bot owners can change the bot's profile picture.", flags: 64 });
+        }
+        const url = interaction.options.getString("url", true);
+        if (!/^https?:\/\/.+/i.test(url)) {
+            return interaction.reply({ content: "❌ Please provide a valid image URL starting with `https://`.", flags: 64 });
+        }
+        await interaction.deferReply({ flags: 64 });
+        try {
+            await client.user.setAvatar(url);
+            const embed = new EmbedBuilder()
+                .setColor((await getGuildStyle(guildId)).color)
+                .setTitle("✅ Bot Avatar Updated")
+                .setDescription("The bot's profile picture has been updated globally across all servers.")
+                .setThumbnail(client.user.displayAvatarURL({ size: 256 }))
+                .setFooter({ text: "Note: Discord rate-limits avatar changes to ~2 per hour." })
+                .setTimestamp();
+            return interaction.editReply({ embeds: [embed] });
+        } catch (err) {
+            const msg = err?.message?.toLowerCase() ?? "";
+            if (msg.includes("rate")) {
+                return interaction.editReply({ content: "❌ Rate limited by Discord. You can only change the avatar a couple of times per hour — try again later." });
+            }
+            return interaction.editReply({ content: `❌ Failed to update avatar: ${err?.message ?? "unknown error"}` });
+        }
+    }
 
     // ── Premium-only subcommands ──────────────────────────────────────────────
     if (sub === "banner" || sub === "nickname") {
@@ -85,7 +122,7 @@ export async function execute(interaction) {
         const embed = new EmbedBuilder()
             .setColor((await getGuildStyle(guildId)).color)
             .setTitle("✅ Banner Updated")
-            .setDescription(bannerUrl ? `Banner image set. It will appear in welcome messages and key embeds.` : "Banner image removed.");
+            .setDescription(bannerUrl ? "Banner image set. It will appear in welcome messages and key embeds." : "Banner image removed.");
         if (bannerUrl) embed.setImage(bannerUrl);
         return interaction.reply({ embeds: [embed], flags: 64 });
     }
@@ -110,6 +147,7 @@ export async function execute(interaction) {
         const embed = new EmbedBuilder()
             .setColor(style.color)
             .setTitle("⚙️ Server Customization Settings")
+            .setThumbnail(style.bannerUrl ?? client.user.displayAvatarURL({ size: 256 }))
             .addFields(
                 { name: "🎨 Embed Color", value: colorHex, inline: true },
                 { name: "📝 Footer Text", value: style.footer ?? "*not set*", inline: true },
@@ -121,8 +159,6 @@ export async function execute(interaction) {
             )
             .setFooter({ text: "Use /customize <subcommand> to change any setting • /welcome to set welcome/leave • /logs to set log channel" })
             .setTimestamp();
-
-        if (style.bannerUrl) embed.setThumbnail(style.bannerUrl);
 
         return interaction.reply({ embeds: [embed], flags: 64 });
     }
