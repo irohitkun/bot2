@@ -308,7 +308,7 @@ async function handleSticky(message) {
         ));
     if (!sticky || message.id === sticky.lastMessageId) return;
     if (sticky.lastMessageId) await message.channel.messages.delete(sticky.lastMessageId).catch(() => {});
-    const newMsg = await message.channel.send({ content: `📌 **Sticky:**\n${sticky.content}` }).catch(() => null);
+    const newMsg = await message.channel.send({ content: sticky.content }).catch(() => null);
     if (newMsg) {
         await db.update(stickyMessagesTable).set({ lastMessageId: newMsg.id })
             .where(and(
