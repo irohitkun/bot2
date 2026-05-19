@@ -43,7 +43,7 @@ async function handleSet(interaction) {
     });
 
     await interaction.reply({
-        embeds: [new EmbedBuilder().setColor(color).setTitle("📌 Sticky Message Set")
+        embeds: [new EmbedBuilder().setColor(color).setTitle("Sticky Message Set")
             .addFields({ name: "Channel", value: channel.toString(), inline: true })
             .setDescription(content.length > 300 ? content.slice(0, 300) + "…" : content)
             .setFooter({ text: "It will re-post itself after every new message in that channel" })],
@@ -51,7 +51,7 @@ async function handleSet(interaction) {
     });
 
     try {
-        const msg = await channel.send({ content: `📌 **Sticky:**\n${content}` });
+        const msg = await channel.send({ content });
         await db.update(stickyMessagesTable)
             .set({ lastMessageId: msg.id })
             .where(and(eq(stickyMessagesTable.guildId, interaction.guild.id), eq(stickyMessagesTable.channelId, channel.id)));
@@ -88,7 +88,7 @@ async function handleList(interaction) {
         `<#${s.channelId}> — ${s.content.slice(0, 60)}${s.content.length > 60 ? "…" : ""}`
     );
     return interaction.reply({
-        embeds: [new EmbedBuilder().setColor(color).setTitle(`📌 Sticky Messages (${stickies.length})`)
+        embeds: [new EmbedBuilder().setColor(color).setTitle(`Sticky Messages (${stickies.length})`)
             .setDescription(lines.join("\n").slice(0, 4000))],
         flags: 64,
     });
