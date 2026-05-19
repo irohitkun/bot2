@@ -36,13 +36,6 @@ export const data = new SlashCommandBuilder()
             .addStringOption((opt) =>
                 opt.setName("url").setDescription("Or paste an image URL instead. Use 'reset' to revert.").setRequired(false)))
     .addSubcommand((sub) =>
-        sub.setName("banner")
-            .setDescription("Set a custom banner for the bot in this server — shown in profiles and welcome messages (Premium)")
-            .addAttachmentOption((opt) =>
-                opt.setName("image").setDescription("Upload an image — PNG, JPG, or GIF").setRequired(false))
-            .addStringOption((opt) =>
-                opt.setName("url").setDescription("Or paste an image URL instead. Use 'none' to remove.").setRequired(false)))
-    .addSubcommand((sub) =>
         sub.setName("nickname")
             .setDescription("Set the bot's nickname in this server (Premium)")
             .addStringOption((opt) =>
@@ -59,11 +52,11 @@ export async function execute(interaction) {
     const sub = interaction.options.getSubcommand();
 
     // ── Premium-only subcommands ──────────────────────────────────────────────
-    if (sub === "avatar" || sub === "banner" || sub === "nickname") {
+    if (sub === "avatar" || sub === "nickname") {
         const { isPremiumGuild, premiumDeniedEmbed } = await import("../utils/permissions.js");
         const premium = await isPremiumGuild(guildId);
         if (!premium) {
-            return interaction.reply({ embeds: [premiumDeniedEmbed("Server Customization (avatar/banner/nickname)")], flags: 64 });
+            return interaction.reply({ embeds: [premiumDeniedEmbed("Server Customization (avatar/nickname)")], flags: 64 });
         }
     }
 
@@ -108,7 +101,6 @@ export async function execute(interaction) {
         await interaction.deferReply({ flags: 64 });
 
         try {
-            // Discord requires base64 data URI for per-guild avatar — fetch and convert
             let avatarData = null;
             if (!isReset) {
                 const imageUrl = attachment?.url ?? urlInput;
@@ -119,7 +111,6 @@ export async function execute(interaction) {
                 body: { avatar: avatarData },
             });
 
-            // Refetch member to get the updated avatar URL
             const botMember = await interaction.guild.members.fetch(client.user.id);
             const newAvatarUrl = botMember.displayAvatarURL({ size: 256 });
 
@@ -137,37 +128,6 @@ export async function execute(interaction) {
         } catch (err) {
             return interaction.editReply({ content: `❌ Failed to update avatar: ${err?.message ?? "Unknown error"}` });
         }
-    }
-
-    if (sub === "banner") {
-        const attachment = interaction.options.getAttachment("image");
-        const urlInput = interaction.options.getString("url");
-
-        if (!attachment && !urlInput) {
-            return interaction.reply({ content: "❌ Please upload an image or provide a URL. Use `none` as the URL to remove the banner.", flags: 64 });
-        }
-        if (attachment && !VALID_IMAGE_TYPES.includes(attachment.contentType)) {
-            return interaction.reply({ content: "❌ Please upload a PNG, JPG, GIF, or WebP image.", flags: 64 });
-        }
-
-        const bannerUrl = urlInput?.toLowerCase() === "none" ? null : (attachment?.url ?? urlInput ?? null);
-
-        await db.insert(serverCustomizationTable).values({ guildId, bannerUrl: bannerUrl ?? undefined })
-            .onConflictDoUpdate({ target: serverCustomizationTable.guildId, set: { bannerUrl, updatedAt: new Date() } });
-        invalidateStyleCache(guildId);
-
-        const style = await getGuildStyle(guildId);
-        const embed = new EmbedBuilder()
-            .setColor(style.color)
-            .setTitle(bannerUrl ? "✅ Server Banner Updated" : "✅ Server Banner Removed")
-            .setDescription(
-                bannerUrl
-                    ? "This server's custom banner has been saved. It will appear in the bot's profile and welcome messages."
-                    : "The custom banner has been removed for this server.",
-            )
-            .setTimestamp();
-        if (bannerUrl) embed.setImage(bannerUrl);
-        return interaction.reply({ embeds: [embed], flags: 64 });
     }
 
     if (sub === "nickname") {
@@ -196,7 +156,6 @@ export async function execute(interaction) {
             .addFields(
                 { name: "🎨 Embed Color", value: colorHex, inline: true },
                 { name: "📝 Footer Text", value: style.footer ?? "*not set*", inline: true },
-                { name: "🖼️ Server Banner", value: style.bannerUrl ? `[View banner](${style.bannerUrl})` : "*not set*", inline: true },
                 { name: "🤖 Server Avatar", value: botMember.avatar ? "Custom (server-specific)" : "Global default", inline: true },
                 { name: "📛 Nickname", value: botMember.nickname ?? "*not set*", inline: true },
                 { name: "👋 Welcome Channel", value: config?.welcomeChannelId ? `<#${config.welcomeChannelId}>` : "*not set*", inline: true },
@@ -206,22 +165,20 @@ export async function execute(interaction) {
             )
             .setFooter({ text: "Use /customize <subcommand> to change any setting • /welcome • /logs" })
             .setTimestamp();
-        if (style.bannerUrl) embed.setImage(style.bannerUrl);
 
         return interaction.reply({ embeds: [embed], flags: 64 });
     }
 
     if (sub === "reset") {
         await db.insert(serverCustomizationTable)
-            .values({ guildId, embedColor: "5865f2", footerText: null, bannerUrl: null })
+            .values({ guildId, embedColor: "5865f2", footerText: null })
             .onConflictDoUpdate({
                 target: serverCustomizationTable.guildId,
-                set: { embedColor: "5865f2", footerText: null, bannerUrl: null, updatedAt: new Date() },
+                set: { embedColor: "5865f2", footerText: null, updatedAt: new Date() },
             });
         invalidateStyleCache(guildId);
         const botMember = interaction.guild.members.me ?? await interaction.guild.members.fetchMe();
         await botMember.setNickname(null).catch(() => {});
-        // Reset per-server avatar
         await client.rest.patch(Routes.guildMember(guildId, client.user.id), {
             body: { avatar: null },
         }).catch(() => {});
