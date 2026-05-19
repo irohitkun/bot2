@@ -99,6 +99,7 @@ export const serverCustomizationTable = pgTable("server_customization", {
     guildId: text("guild_id").primaryKey(),
     embedColor: text("embed_color").notNull().default("5865f2"),
     footerText: text("footer_text"),
+    bannerUrl: text("banner_url"),
     welcomeChannelId: text("welcome_channel_id"),
     welcomeMessage: text("welcome_message"),
     welcomeEmbedTemplate: text("welcome_embed_template"),
@@ -366,7 +367,6 @@ export const embedTemplatesTable = pgTable("embed_templates", {
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [unique("embed_templates_guild_name_unique").on(t.guildId, t.name)]);
 
-// ── Temp Roles ────────────────────────────────────────────────────────────────
 export const tempRolesTable = pgTable("temp_roles", {
     id: serial("id").primaryKey(),
     guildId: text("guild_id").notNull(),
@@ -380,7 +380,6 @@ export const tempRolesTable = pgTable("temp_roles", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// ── Jail System ───────────────────────────────────────────────────────────────
 export const jailSettingsTable = pgTable("jail_settings", {
     guildId: text("guild_id").primaryKey(),
     jailRoleId: text("jail_role_id"),
@@ -403,7 +402,6 @@ export const jailRecordsTable = pgTable("jail_records", {
     active: boolean("active").notNull().default(true),
 });
 
-// ── Vote Opt-In Reminders ─────────────────────────────────────────────────────
 export const voteReminderOptInTable = pgTable("vote_reminder_opt_in", {
     userId: text("user_id").primaryKey(),
     optedIn: boolean("opted_in").notNull().default(true),
