@@ -16,7 +16,6 @@ export async function getGuildStyle(guildId) {
     const style = {
         color: row?.embedColor ? parseInt(row.embedColor.replace("#", ""), 16) || DEFAULT_COLOR : DEFAULT_COLOR,
         footer: row?.footerText ?? null,
-        bannerUrl: row?.bannerUrl ?? null,
     };
     styleCache.set(guildId, { value: style, fetchedAt: Date.now() });
     return style;
