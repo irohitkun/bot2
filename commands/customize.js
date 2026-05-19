@@ -21,13 +21,17 @@ export const data = new SlashCommandBuilder()
     .addSubcommand((sub) =>
         sub.setName("banner")
             .setDescription("Set a custom banner/thumbnail image shown in bot embeds (Premium)")
+            .addAttachmentOption((opt) =>
+                opt.setName("image").setDescription("Upload an image — PNG, JPG, or GIF").setRequired(false))
             .addStringOption((opt) =>
-                opt.setName("url").setDescription("Image URL (https://...), or 'none' to remove").setRequired(true)))
+                opt.setName("url").setDescription("Or paste an image URL instead").setRequired(false)))
     .addSubcommand((sub) =>
         sub.setName("avatar")
             .setDescription("Set a custom profile picture for the bot in this server (Premium)")
+            .addAttachmentOption((opt) =>
+                opt.setName("image").setDescription("Upload an image — PNG, JPG, or GIF").setRequired(false))
             .addStringOption((opt) =>
-                opt.setName("url").setDescription("Image URL (https://...) — PNG, JPG, GIF supported. Use 'reset' to revert to global avatar.").setRequired(true)))
+                opt.setName("url").setDescription("Or paste an image URL instead. Use 'reset' to revert.").setRequired(false)))
     .addSubcommand((sub) =>
         sub.setName("nickname")
             .setDescription("Set the bot's nickname in this server (Premium)")
@@ -80,18 +84,28 @@ export async function execute(interaction) {
     }
 
     if (sub === "avatar") {
-        const url = interaction.options.getString("url", true);
-        const isReset = url.toLowerCase() === "reset";
+        const attachment = interaction.options.getAttachment("image");
+        const urlInput = interaction.options.getString("url");
+        const isReset = urlInput?.toLowerCase() === "reset";
 
-        if (!isReset && !/^https?:\/\/.+/i.test(url)) {
-            return interaction.reply({ content: "❌ Please provide a valid image URL starting with `https://`, or use `reset` to revert.", flags: 64 });
+        if (!attachment && !urlInput) {
+            return interaction.reply({ content: "❌ Please either upload an image or provide a URL. Use `reset` to revert to the global avatar.", flags: 64 });
+        }
+
+        const imageUrl = attachment?.url ?? urlInput;
+
+        if (!isReset && attachment) {
+            const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"];
+            if (!validTypes.includes(attachment.contentType)) {
+                return interaction.reply({ content: "❌ Please upload a PNG, JPG, GIF, or WebP image.", flags: 64 });
+            }
         }
 
         await interaction.deferReply({ flags: 64 });
 
         try {
             const botMember = interaction.guild.members.me;
-            await botMember.setAvatar(isReset ? null : url);
+            await botMember.setAvatar(isReset ? null : imageUrl);
 
             const newAvatarUrl = botMember.displayAvatarURL({ size: 256 });
             const embed = new EmbedBuilder()
@@ -106,20 +120,31 @@ export async function execute(interaction) {
                 .setTimestamp();
             return interaction.editReply({ embeds: [embed] });
         } catch (err) {
-            const msg = err?.message ?? "Unknown error";
-            return interaction.editReply({ content: `❌ Failed to update avatar: ${msg}` });
+            return interaction.editReply({ content: `❌ Failed to update avatar: ${err?.message ?? "Unknown error"}` });
         }
     }
 
     if (sub === "banner") {
-        const url = interaction.options.getString("url", true);
-        const bannerUrl = url.toLowerCase() === "none" ? null : url;
-        if (bannerUrl && !/^https?:\/\/.+\.(png|jpg|jpeg|gif|webp)/i.test(bannerUrl)) {
-            return interaction.reply({ content: "❌ Please provide a valid image URL ending in `.png`, `.jpg`, `.gif`, or `.webp`.", flags: 64 });
+        const attachment = interaction.options.getAttachment("image");
+        const urlInput = interaction.options.getString("url");
+
+        if (!attachment && !urlInput) {
+            return interaction.reply({ content: "❌ Please either upload an image or provide a URL. Use `none` as the URL to remove the banner.", flags: 64 });
         }
+
+        if (attachment) {
+            const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"];
+            if (!validTypes.includes(attachment.contentType)) {
+                return interaction.reply({ content: "❌ Please upload a PNG, JPG, GIF, or WebP image.", flags: 64 });
+            }
+        }
+
+        const bannerUrl = urlInput?.toLowerCase() === "none" ? null : (attachment?.url ?? urlInput ?? null);
+
         await db.insert(serverCustomizationTable).values({ guildId, bannerUrl: bannerUrl ?? undefined })
             .onConflictDoUpdate({ target: serverCustomizationTable.guildId, set: { bannerUrl, updatedAt: new Date() } });
         invalidateStyleCache(guildId);
+
         const embed = new EmbedBuilder()
             .setColor((await getGuildStyle(guildId)).color)
             .setTitle("✅ Banner Updated")
