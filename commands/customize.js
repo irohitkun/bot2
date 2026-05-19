@@ -111,7 +111,8 @@ export async function execute(interaction) {
                 body: { avatar: avatarData },
             });
 
-            const botMember = await interaction.guild.members.fetch(client.user.id);
+            // Force-fetch to bypass cache and get the updated avatar hash
+            const botMember = await interaction.guild.members.fetch({ user: client.user.id, force: true });
             const newAvatarUrl = botMember.displayAvatarURL({ size: 256 });
 
             const embed = new EmbedBuilder()
@@ -146,8 +147,11 @@ export async function execute(interaction) {
         const [config] = await db.select().from(serverCustomizationTable).where(eq(serverCustomizationTable.guildId, guildId));
 
         const colorHex = `#${style.color.toString(16).padStart(6, "0").toUpperCase()}`;
-        const botMember = await interaction.guild.members.fetch(client.user.id);
+
+        // Force-fetch to get the real guild avatar hash, bypassing cache
+        const botMember = await interaction.guild.members.fetch({ user: client.user.id, force: true });
         const currentAvatarUrl = botMember.displayAvatarURL({ size: 256 });
+        const hasCustomAvatar = !!botMember.avatar;
 
         const embed = new EmbedBuilder()
             .setColor(style.color)
@@ -156,7 +160,7 @@ export async function execute(interaction) {
             .addFields(
                 { name: "🎨 Embed Color", value: colorHex, inline: true },
                 { name: "📝 Footer Text", value: style.footer ?? "*not set*", inline: true },
-                { name: "🤖 Server Avatar", value: botMember.avatar ? "Custom (server-specific)" : "Global default", inline: true },
+                { name: "🤖 Server Avatar", value: hasCustomAvatar ? "Custom (server-specific)" : "Global default", inline: true },
                 { name: "📛 Nickname", value: botMember.nickname ?? "*not set*", inline: true },
                 { name: "👋 Welcome Channel", value: config?.welcomeChannelId ? `<#${config.welcomeChannelId}>` : "*not set*", inline: true },
                 { name: "👋 Welcome Message", value: config?.welcomeMessage ? config.welcomeMessage.slice(0, 80) + (config.welcomeMessage.length > 80 ? "…" : "") : "*default*", inline: false },
