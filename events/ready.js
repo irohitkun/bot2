@@ -8,6 +8,7 @@ import { scheduleGiveawayEnd } from "../utils/giveawayScheduler.js";
 import { recoverTempBans } from "../utils/tempBanScheduler.js";
 import { recoverTempRoles } from "../utils/tempRoleScheduler.js";
 import { startVoteReminderPoller } from "../utils/voteReminder.js";
+import { loadEmojiServer } from "../utils/emojis.js";
 
 const TIER_ICONS = { free: "🔓", premium: "⭐" };
 
@@ -29,6 +30,9 @@ export async function execute(client) {
     } catch (err) {
         console.error("Failed to register slash commands:", err);
     }
+
+    // Load custom/animated emojis from the designated emoji server
+    await loadEmojiServer();
 
     startExpirationReminders(client);
     await recoverActiveGiveaways(client);
