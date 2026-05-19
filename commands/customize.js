@@ -4,6 +4,8 @@ import { eq } from "drizzle-orm";
 import { getGuildStyle, invalidateStyleCache, hexToInt } from "../utils/guildStyle.js";
 import { client } from "../index.js";
 
+const BOT_OWNER_IDS = process.env.BOT_OWNERS?.split(",").map((id) => id.trim()).filter(Boolean) ?? [];
+
 export const data = new SlashCommandBuilder()
     .setName("customize")
     .setDescription("Customize how the bot looks and behaves in your server")
@@ -19,19 +21,19 @@ export const data = new SlashCommandBuilder()
             .addStringOption((opt) =>
                 opt.setName("text").setDescription("Footer text, or 'none' to remove").setRequired(true).setMaxLength(100)))
     .addSubcommand((sub) =>
-        sub.setName("banner")
-            .setDescription("Set a custom banner/thumbnail image shown in bot embeds (Premium)")
-            .addAttachmentOption((opt) =>
-                opt.setName("image").setDescription("Upload an image — PNG, JPG, or GIF").setRequired(false))
-            .addStringOption((opt) =>
-                opt.setName("url").setDescription("Or paste an image URL instead").setRequired(false)))
-    .addSubcommand((sub) =>
         sub.setName("avatar")
             .setDescription("Set a custom profile picture for the bot in this server (Premium)")
             .addAttachmentOption((opt) =>
                 opt.setName("image").setDescription("Upload an image — PNG, JPG, or GIF").setRequired(false))
             .addStringOption((opt) =>
                 opt.setName("url").setDescription("Or paste an image URL instead. Use 'reset' to revert.").setRequired(false)))
+    .addSubcommand((sub) =>
+        sub.setName("banner")
+            .setDescription("Set the bot's global profile banner — shown on the bot's Discord profile (Bot Owner only)")
+            .addAttachmentOption((opt) =>
+                opt.setName("image").setDescription("Upload an image — PNG, JPG, or GIF").setRequired(false))
+            .addStringOption((opt) =>
+                opt.setName("url").setDescription("Or paste an image URL instead. Use 'reset' to remove.").setRequired(false)))
     .addSubcommand((sub) =>
         sub.setName("nickname")
             .setDescription("Set the bot's nickname in this server (Premium)")
@@ -48,12 +50,65 @@ export async function execute(interaction) {
     const guildId = interaction.guild.id;
     const sub = interaction.options.getSubcommand();
 
+    // ── Bot-owner-only: banner ────────────────────────────────────────────────
+    if (sub === "banner") {
+        if (!BOT_OWNER_IDS.includes(interaction.user.id)) {
+            return interaction.reply({ content: "❌ Only bot owners can change the bot's global profile banner.", flags: 64 });
+        }
+
+        const attachment = interaction.options.getAttachment("image");
+        const urlInput = interaction.options.getString("url");
+        const isReset = urlInput?.toLowerCase() === "reset";
+
+        if (!attachment && !urlInput) {
+            return interaction.reply({ content: "❌ Please upload an image or provide a URL. Use `reset` to remove the banner.", flags: 64 });
+        }
+
+        if (attachment) {
+            const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"];
+            if (!validTypes.includes(attachment.contentType)) {
+                return interaction.reply({ content: "❌ Please upload a PNG, JPG, GIF, or WebP image.", flags: 64 });
+            }
+        }
+
+        const imageUrl = attachment?.url ?? urlInput;
+
+        await interaction.deferReply({ flags: 64 });
+
+        try {
+            await client.user.setBanner(isReset ? null : imageUrl);
+            // Fetch fresh user data so the banner URL is up to date
+            await client.user.fetch(true);
+
+            const bannerUrl = client.user.bannerURL({ size: 1024 });
+            const style = await getGuildStyle(guildId);
+            const embed = new EmbedBuilder()
+                .setColor(style.color)
+                .setTitle(isReset ? "✅ Profile Banner Removed" : "✅ Profile Banner Updated")
+                .setDescription(
+                    isReset
+                        ? "The bot's profile banner has been removed globally."
+                        : "The bot's profile banner has been updated. It appears when someone clicks the bot's profile in any server.",
+                )
+                .setFooter({ text: "Note: Discord rate-limits banner changes to ~2 per hour." })
+                .setTimestamp();
+            if (bannerUrl) embed.setImage(bannerUrl);
+            return interaction.editReply({ embeds: [embed] });
+        } catch (err) {
+            const msg = err?.message?.toLowerCase() ?? "";
+            if (msg.includes("rate")) {
+                return interaction.editReply({ content: "❌ Rate limited by Discord. You can only change the banner a couple of times per hour — try again later." });
+            }
+            return interaction.editReply({ content: `❌ Failed to update banner: ${err?.message ?? "Unknown error"}` });
+        }
+    }
+
     // ── Premium-only subcommands ──────────────────────────────────────────────
-    if (sub === "banner" || sub === "nickname" || sub === "avatar") {
+    if (sub === "avatar" || sub === "nickname") {
         const { isPremiumGuild, premiumDeniedEmbed } = await import("../utils/permissions.js");
         const premium = await isPremiumGuild(guildId);
         if (!premium) {
-            return interaction.reply({ embeds: [premiumDeniedEmbed("Server Customization (avatar/banner/nickname)")], flags: 64 });
+            return interaction.reply({ embeds: [premiumDeniedEmbed("Server Customization (avatar/nickname)")], flags: 64 });
         }
     }
 
@@ -89,17 +144,17 @@ export async function execute(interaction) {
         const isReset = urlInput?.toLowerCase() === "reset";
 
         if (!attachment && !urlInput) {
-            return interaction.reply({ content: "❌ Please either upload an image or provide a URL. Use `reset` to revert to the global avatar.", flags: 64 });
+            return interaction.reply({ content: "❌ Please upload an image or provide a URL. Use `reset` to revert to the global avatar.", flags: 64 });
         }
 
-        const imageUrl = attachment?.url ?? urlInput;
-
-        if (!isReset && attachment) {
+        if (attachment) {
             const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"];
             if (!validTypes.includes(attachment.contentType)) {
                 return interaction.reply({ content: "❌ Please upload a PNG, JPG, GIF, or WebP image.", flags: 64 });
             }
         }
+
+        const imageUrl = attachment?.url ?? urlInput;
 
         await interaction.deferReply({ flags: 64 });
 
@@ -124,35 +179,6 @@ export async function execute(interaction) {
         }
     }
 
-    if (sub === "banner") {
-        const attachment = interaction.options.getAttachment("image");
-        const urlInput = interaction.options.getString("url");
-
-        if (!attachment && !urlInput) {
-            return interaction.reply({ content: "❌ Please either upload an image or provide a URL. Use `none` as the URL to remove the banner.", flags: 64 });
-        }
-
-        if (attachment) {
-            const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"];
-            if (!validTypes.includes(attachment.contentType)) {
-                return interaction.reply({ content: "❌ Please upload a PNG, JPG, GIF, or WebP image.", flags: 64 });
-            }
-        }
-
-        const bannerUrl = urlInput?.toLowerCase() === "none" ? null : (attachment?.url ?? urlInput ?? null);
-
-        await db.insert(serverCustomizationTable).values({ guildId, bannerUrl: bannerUrl ?? undefined })
-            .onConflictDoUpdate({ target: serverCustomizationTable.guildId, set: { bannerUrl, updatedAt: new Date() } });
-        invalidateStyleCache(guildId);
-
-        const embed = new EmbedBuilder()
-            .setColor((await getGuildStyle(guildId)).color)
-            .setTitle("✅ Banner Updated")
-            .setDescription(bannerUrl ? "Banner image set. It will appear in welcome messages and key embeds." : "Banner image removed.");
-        if (bannerUrl) embed.setImage(bannerUrl);
-        return interaction.reply({ embeds: [embed], flags: 64 });
-    }
-
     if (sub === "nickname") {
         const name = interaction.options.getString("name", true);
         const botMember = interaction.guild.members.me;
@@ -170,7 +196,9 @@ export async function execute(interaction) {
 
         const colorHex = `#${style.color.toString(16).padStart(6, "0").toUpperCase()}`;
         const botMember = interaction.guild.members.me;
+        const botUser = await client.user.fetch(true);
         const currentAvatarUrl = botMember.displayAvatarURL({ size: 256 });
+        const bannerUrl = botUser.bannerURL({ size: 1024 });
 
         const embed = new EmbedBuilder()
             .setColor(style.color)
@@ -179,7 +207,7 @@ export async function execute(interaction) {
             .addFields(
                 { name: "🎨 Embed Color", value: colorHex, inline: true },
                 { name: "📝 Footer Text", value: style.footer ?? "*not set*", inline: true },
-                { name: "🖼️ Banner", value: style.bannerUrl ? `[View image](${style.bannerUrl})` : "*not set*", inline: true },
+                { name: "🖼️ Profile Banner", value: bannerUrl ? `[View banner](${bannerUrl})` : "*not set*", inline: true },
                 { name: "🤖 Server Avatar", value: botMember.avatar ? "Custom (server-specific)" : "Global default", inline: true },
                 { name: "📛 Nickname", value: botMember.nickname ?? "*not set*", inline: true },
                 { name: "👋 Welcome Channel", value: config?.welcomeChannelId ? `<#${config.welcomeChannelId}>` : "*not set*", inline: true },
@@ -189,21 +217,22 @@ export async function execute(interaction) {
             )
             .setFooter({ text: "Use /customize <subcommand> to change any setting • /welcome • /logs" })
             .setTimestamp();
+        if (bannerUrl) embed.setImage(bannerUrl);
 
         return interaction.reply({ embeds: [embed], flags: 64 });
     }
 
     if (sub === "reset") {
         await db.insert(serverCustomizationTable)
-            .values({ guildId, embedColor: "5865f2", footerText: null, bannerUrl: null })
+            .values({ guildId, embedColor: "5865f2", footerText: null })
             .onConflictDoUpdate({
                 target: serverCustomizationTable.guildId,
-                set: { embedColor: "5865f2", footerText: null, bannerUrl: null, updatedAt: new Date() },
+                set: { embedColor: "5865f2", footerText: null, updatedAt: new Date() },
             });
         invalidateStyleCache(guildId);
         const botMember = interaction.guild.members.me;
         await botMember.setNickname(null).catch(() => {});
         await botMember.setAvatar(null).catch(() => {});
-        return interaction.reply({ content: "✅ All customizations have been reset to default.", flags: 64 });
+        return interaction.reply({ content: "✅ All server customizations have been reset to default.", flags: 64 });
     }
 }
