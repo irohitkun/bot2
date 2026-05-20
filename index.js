@@ -32,6 +32,32 @@ export const client = new Client({
 
 export const commands = new Collection();
 
+// ── ngrok tunnel (optional) ───────────────────────────────────────────────────
+// Set NGROK_AUTHTOKEN in your env to enable. NGROK_DOMAIN sets a fixed URL
+// (claim your free static domain at dashboard.ngrok.com → Domains).
+// If NGROK_DOMAIN is not set, ngrok generates a random URL each restart.
+async function startNgrokTunnel(port) {
+    const authToken = process.env.NGROK_AUTHTOKEN;
+    if (!authToken) return;
+
+    try {
+        const ngrok = await import("@ngrok/ngrok");
+        const opts = { addr: port, authtoken: authToken };
+        if (process.env.NGROK_DOMAIN) opts.domain = process.env.NGROK_DOMAIN;
+
+        const listener = await ngrok.connect(opts);
+        const publicUrl = listener.url();
+        console.log("╔══════════════════════════════════════════════════════╗");
+        console.log(`║  ngrok tunnel active: ${publicUrl}`);
+        console.log(`║  Top.gg webhook URL:  ${publicUrl}/topgg/webhook`);
+        console.log("╚══════════════════════════════════════════════════════╝");
+        console.log("[ngrok] Copy the webhook URL above into your Top.gg bot dashboard → Webhooks.");
+    } catch (err) {
+        console.warn("[ngrok] Failed to start tunnel:", err.message);
+        console.warn("[ngrok] Bot continues running — vote webhooks won't be received until the tunnel is up.");
+    }
+}
+
 function startHttpServer() {
     const port = parseInt(process.env.PORT ?? "3000", 10);
 
@@ -48,6 +74,8 @@ function startHttpServer() {
 
     const server = app.listen(port, "0.0.0.0", () => {
         console.log(`HTTP server running on port ${port}`);
+        // Start ngrok after the server is listening
+        startNgrokTunnel(port);
     });
 
     server.on("error", (err) => {
