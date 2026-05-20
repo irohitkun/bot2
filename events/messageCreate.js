@@ -265,6 +265,44 @@ export async function execute(message) {
 
     if (!commandName) return;
 
+    // ── Command alias map ─────────────────────────────────────────────────────
+    const COMMAND_ALIASES = {
+        // Moderation shorthands
+        "to":       "mute",
+        "timeout":  "mute",
+        "b":        "ban",
+        "k":        "kick",
+        "w":        "warn",
+        "ub":       "unban",
+        "um":       "unmute",
+        "cw":       "clearwarn",
+        // Utility shorthands
+        "p":        "purge",
+        "clear":    "purge",
+        "ui":       "userinfo",
+        "whois":    "userinfo",
+        "si":       "serverinfo",
+        "av":       "avatar",
+        "pfp":      "avatar",
+        "r":        "remind",
+        // Channel shorthands — cmd + injected subcommand arg
+        "rename":   { cmd: "channel", inject: ["rename"] },
+        "topic":    { cmd: "channel", inject: ["topic"] },
+        "move":     { cmd: "channel", inject: ["move"] },
+        // Role members
+        "members":  "inrole",
+    };
+    const _alias = COMMAND_ALIASES[commandName];
+    if (_alias) {
+        if (typeof _alias === "string") {
+            commandName = _alias;
+        } else {
+            commandName = _alias.cmd;
+            args = [..._alias.inject, ...args];
+        }
+    }
+
+
     // ── Rate limit prefix commands ────────────────────────────────────────────
     const heavyPrefixCmds = new Set(["purge", "massrole", "lockdown", "ai"]);
     const cdMs = heavyPrefixCmds.has(commandName) ? 8000 : 3000;
