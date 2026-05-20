@@ -16,7 +16,8 @@
     "drizzle-orm": "^0.45.1",
     "openai": "^4.103.0",
     "pg": "^8.20.0",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "@ngrok/ngrok": "^1.4.0"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.9"
