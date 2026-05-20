@@ -265,20 +265,20 @@ export async function execute(message) {
 
     if (!commandName) return;
 
+
     // ── Command alias map ─────────────────────────────────────────────────────
     const COMMAND_ALIASES = {
-        // Moderation shorthands
-        "to":       "mute",
+        // Timeout / mute
+        "to":       "mute",       // %to @user 10m — timeout
         "timeout":  "mute",
-        "b":        "ban",
-        "k":        "kick",
-        "w":        "warn",
+        "rto":      "unmute",     // %rto @user — remove timeout
+        // Unban / unmute (kept, not dangerous)
         "ub":       "unban",
         "um":       "unmute",
         "cw":       "clearwarn",
-        // Utility shorthands
-        "p":        "purge",
+        // Purge — only 'clear' alias, no single-letter
         "clear":    "purge",
+        // Utility shorthands
         "ui":       "userinfo",
         "whois":    "userinfo",
         "si":       "serverinfo",
