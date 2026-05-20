@@ -17,9 +17,11 @@ export async function execute(interaction) {
     const reason = interaction.options.getString("reason", true);
     const guild = interaction.guild;
 
+    if (target.bot) return interaction.reply({ content: "❌ You cannot warn a bot.", flags: 64 });
+    if (target.id === interaction.user.id) return interaction.reply({ content: "❌ You cannot warn yourself.", flags: 64 });
+
     const member = await guild.members.fetch(target.id).catch(() => null);
     if (!member) return interaction.reply({ content: "❌ Could not find that member in the server.", flags: 64 });
-    if (member.id === interaction.user.id) return interaction.reply({ content: "❌ You cannot warn yourself.", flags: 64 });
 
     await db.insert(warningsTable).values({
         guildId: guild.id,
