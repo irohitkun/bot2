@@ -12,8 +12,9 @@ export const command = {
         if (args.length < 2)
             return void message.reply(`Usage: \`${this.usage}\`\nWorks with mentions or raw IDs. Toggles the role — no separate add/remove needed.`);
 
-        const userId = parseMention(args[0]) ?? args[0].replace(/\D/g, "") || args[0];
-        const roleId = parseMention(args[1]) ?? args[1].replace(/[^0-9]/g, "") || args[1];
+        // Parentheses required — cannot mix ?? and || without them (JS spec)
+        const userId = (parseMention(args[0]) ?? args[0].replace(/\D/g, "")) || args[0];
+        const roleId = (parseMention(args[1]) ?? args[1].replace(/[^0-9]/g, "")) || args[1];
 
         const [member, role] = await Promise.all([
             message.guild.members.fetch(userId).catch(() => null),
