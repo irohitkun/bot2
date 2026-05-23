@@ -2,6 +2,22 @@ import { EmbedBuilder } from "discord.js";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db, memberStatsTable } from "../db/index.js";
 
+export async function incrementMessageCount(guildId, user) {
+    await db.insert(memberStatsTable).values({
+        guildId,
+        userId: user.id,
+        userTag: user.tag,
+        messageCount: 1,
+    }).onConflictDoUpdate({
+        target: [memberStatsTable.guildId, memberStatsTable.userId],
+        set: {
+            messageCount: sql`${memberStatsTable.messageCount} + 1`,
+            userTag: user.tag,
+            updatedAt: new Date(),
+        },
+    });
+}
+
 const DAILY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const STREAK_WINDOW_MS = 48 * 60 * 60 * 1000;
 const CHAT_XP_COOLDOWN_MS = 60 * 1000;
