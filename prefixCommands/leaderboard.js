@@ -4,6 +4,7 @@ import { getGuildStyle } from "../utils/guildStyle.js";
 
 export const command = {
     name: "leaderboard",
+    aliases: ["lb", "top"],
     usage: "%leaderboard [limit]",
     description: "Show the top members in this server by XP",
     async execute(message, args) {
