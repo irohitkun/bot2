@@ -136,7 +136,12 @@ import { scheduleVoteReminder } from "../utils/voteReminder.js";
       }
 
       // Has voted and not credited yet — credit + pick server
-      const newStreak = (record?.voteStreak ?? 0) + 1;
+      // Reset streak if last vote was more than 36h ago (missed a voting window)
+      const STREAK_RESET_WINDOW_MS = 36 * 60 * 60 * 1000;
+      const streakExpired = record?.lastVotedAt
+          ? Date.now() - record.lastVotedAt.getTime() > STREAK_RESET_WINDOW_MS
+          : false;
+      const newStreak = record && !streakExpired ? (record.voteStreak ?? 0) + 1 : 1;
       const newTotal = (record?.totalVotes ?? 0) + 1;
       const coinsEarned = VOTE_COIN_REWARD + newStreak * VOTE_STREAK_BONUS;
 
