@@ -3,6 +3,7 @@ import { createRankEmbed, getLeaderboard, getMemberRank, getOrCreateMemberStats 
 
 export const command = {
     name: "rank",
+    aliases: ["level", "lvl", "xp"],
     usage: "%rank [@user]",
     description: "View your server rank",
     async execute(message) {
