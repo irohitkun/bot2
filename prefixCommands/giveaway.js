@@ -35,6 +35,7 @@ function buildEmbed(row) {
 
 export const command = {
     name: "giveaway",
+    aliases: ["gw", "g"],
     usage: "%giveaway <start|end|cancel|list|extend|reroll> ...",
     description: "Manage giveaways",
     async execute(message, args) {
