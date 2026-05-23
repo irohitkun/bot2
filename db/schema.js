@@ -372,6 +372,8 @@ export const tempBansTable = pgTable("temp_bans", {
     moderatorTag: text("moderator_tag").notNull(),
     reason: text("reason").notNull(),
     unbanAt: timestamp("unban_at").notNull(),
+    unbanned: boolean("unbanned").notNull().default(false),
+    unbannedAt: timestamp("unbanned_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -385,6 +387,8 @@ export const tempRolesTable = pgTable("temp_roles", {
     moderatorId: text("moderator_id").notNull(),
     reason: text("reason").notNull(),
     expiresAt: timestamp("expires_at").notNull(),
+    removed: boolean("removed").notNull().default(false),
+    removedAt: timestamp("removed_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
