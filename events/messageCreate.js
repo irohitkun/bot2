@@ -18,6 +18,9 @@ async function loadPrefixCommands() {
         const mod = await import(pathToFileURL(resolve(dir, file)).href);
         if (mod.command?.name) {
             prefixCommands.set(mod.command.name, mod.command);
+            for (const alias of mod.command.aliases ?? []) {
+                if (!prefixCommands.has(alias)) prefixCommands.set(alias, mod.command);
+            }
         }
     }
     console.log(`Loaded ${prefixCommands.size} prefix commands.`);
