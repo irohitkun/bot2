@@ -55,6 +55,7 @@ export async function pickGiveawayWinners(message, row) {
     const seen = new Set();
     for (const user of users.values()) {
         if (user.bot || seen.has(user.id)) continue;
+        if (user.id === row.hostId) continue; // host cannot win their own giveaway
         seen.add(user.id);
         const member = await guild.members.fetch(user.id).catch(() => null);
         const weight = entryWeightForMember(member, user, row);
