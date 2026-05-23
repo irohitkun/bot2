@@ -2,6 +2,7 @@ import { EmbedBuilder, PermissionFlagsBits } from "discord.js";
 import { parseMention } from "./index.js";
 export const command = {
     name: "kick",
+    aliases: ["k"],
     usage: "%kick @user [reason]",
     description: "Kick a member from the server",
     async execute(message, args) {
