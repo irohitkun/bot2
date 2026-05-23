@@ -5,6 +5,7 @@ const TWO_WEEKS = 14 * 24 * 60 * 60 * 1000;
 
 export const command = {
     name: "purge",
+    aliases: ["clear", "prune", "clean"],
     usage: [
         "%purge <1-100> [@user]         — delete last N messages",
         "%purge user <@user> [amount]   — delete a user's recent messages",
