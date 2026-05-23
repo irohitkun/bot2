@@ -1,136 +1,149 @@
 export const helpCategories = [
-      {
-          key: "moderation",
-          label: "Moderation",
-          emoji: "🔨",
-          description: "Ban, kick, mute, warn, jail, and manage members",
-          commands: [
-              ["/ban", "Permanently ban a member"],
-              ["/tempban", "Temporarily ban — auto-unbanned after the duration"],
-              ["/kick", "Kick a member from the server"],
-              ["/mute", "Timeout a member (up to 28 days) · alias: %to, %timeout"],
-              ["/unmute", "Remove a timeout · alias: %rto, %um, %ub (unban)"],
-              ["/masstimeout", "Timeout all humans or members with a specific role at once"],
-              ["/warn", "Warn a member (stored in DB, DMs the user)"],
-              ["/warnings", "View all warnings for a member"],
-              ["/clearwarn", "Clear one or all warnings for a member · alias: %cw"],
-              ["/history", "Full mod history — warnings, temp bans, and notes"],
-              ["/note", "Add, list, or delete staff-only notes on a member"],
-              ["/purge", "Bulk delete messages (amount / user / until / from) · alias: %clear"],
-              ["/lock", "Lock a channel (prevent @everyone from sending)"],
-              ["/unlock", "Unlock a previously locked channel"],
-              ["/massrole", "Add or remove a role from all humans, bots, or everyone"],
-              ["/lockdown", "Emergency lockdown — lock or unlock all text channels"],
-              ["/slowmode", "Set slowmode on a channel"],
-              ["/temprole", "Temporarily assign a role — auto-removed after the duration"],
-              ["/jail member", "Jail or unjail a member — smart toggle. Use once to jail, again to release"],
-              ["/jail setup", "Configure the jail role and optional channel for jailed members"],
-              ["/automod", "Configure automatic moderation (word filter, links, invites, spam)"],
-          ],
-      },
-      {
-          key: "server",
-          label: "Server Tools",
-          emoji: "⚙️",
-          description: "Tickets, giveaways, reaction roles, and server setup",
-          commands: [
-              ["/ticket", "Configure and manage support tickets (+ AI summarize)"],
-              ["/reactionroles", "Create interactive reaction role menus"],
-              ["/giveaway", "Create and manage giveaways with role/age requirements"],
-              ["/logs", "Configure server mod-log channel"],
-              ["/welcome", "Configure welcome and goodbye messages"],
-              ["/channel", "Create, rename, or delete channels · aliases: %rename, %topic, %move"],
-              ["/role add/remove", "Add or remove a role from a user"],
-              ["/role members", "List all members with a specific role (paginated, no pings) · alias: %inrole"],
-              ["%role <uid> <role-id>", "Prefix shortcut — toggles role on/off. Works with raw IDs or mentions"],
-              ["/customize", "Customize bot embed color, footer, avatar (per-server), and nickname"],
-              ["/setprefix", "Change prefix command prefix"],
-              ["/noprefix", "Manage premium no-prefix access"],
-              ["/j2c", "⭐ Join-to-Create voice channels — users get instant private VCs"],
-              ["/j2cpanel", "⭐ Control panel for your J2C temp channel — rename, lock, kick, transfer"],
-              ["/starboard", "⭐ Hall-of-fame channel for starred messages"],
-              ["/birthday", "Birthday system with daily announcements"],
-              ["/customcmd", "⭐ Create server-specific custom commands"],
-              ["/verification", "Button-based member verification gate"],
-              ["/antinuke", "Protect your server from mass destructive actions"],
-          ],
-      },
-      {
-          key: "info",
-          label: "Info",
-          emoji: "ℹ️",
-          description: "Server info, user info, and bot status",
-          commands: [
-              ["/help", "Show the interactive help menu"],
-              ["/setupcheck", "Check bot setup and permissions"],
-              ["/ping", "Check bot latency and API response time"],
-              ["/botinfo", "View bot statistics"],
-              ["/serverinfo", "View detailed server information · alias: %si"],
-              ["/userinfo", "View user profile and account details · alias: %ui, %whois"],
-              ["/avatar", "View a user's avatar in full size · alias: %av, %pfp"],
-              ["/banner", "View a user's banner"],
-              ["/invite", "Get the bot invite link"],
-          ],
-      },
-      {
-          key: "utility",
-          label: "Utility",
-          emoji: "🔧",
-          description: "Tags, reminders, polls, snipe, and more",
-          commands: [
-              ["/tag", "Use or manage server tags (staff-triggered canned responses)"],
-              ["/sticky", "Stick a message to the bottom of a channel"],
-              ["/snipe", "View the last deleted message in a channel"],
-              ["/remind", "Set a personal reminder · alias: %r"],
-              ["/poll", "Create a reaction-based poll with up to 10 options"],
-              ["/translate", "Translate text to any language"],
-              ["/afk", "Set an AFK status that notifies people who ping you"],
-              ["/embed", "Build and post a custom embed message"],
-              ["/schedule", "Schedule a message to be sent later"],
-              ["/confession", "Submit an anonymous confession (if enabled)"],
-              ["/vote check", "Check vote status + claim rewards and activate Premium"],
-              ["/vote status", "See your streak, total votes, and this server's premium status"],
-              ["/vote remind", "Toggle DM reminders when your 12h voting window opens"],
-          ],
-      },
-      {
-          key: "community",
-          label: "Community",
-          emoji: "🏆",
-          description: "XP, levels, daily rewards, and leaderboards",
-          commands: [
-              ["/rank", "View your current XP, level, and rank in the server"],
-              ["/leaderboard", "View the top members by XP"],
-              ["/daily", "Claim your daily coins reward"],
-              ["/profile", "View your full community profile"],
-          ],
-      },
-      {
-          key: "premium",
-          label: "Premium / AI",
-          emoji: "⭐",
-          description: "AI assistant, premium features, and how to activate",
-          commands: [
-              ["/ai", "⭐ AI Assistant — describe actions in plain English and the bot does them"],
-              ["/ailog", "⭐ View the AI assistant audit log"],
-              ["/premium", "Check premium status and activate via vote or trial"],
-              ["/premiumadmin", "Admin tools for premium management"],
-              ["/freetrial", "Activate a free 30-day trial of premium features"],
-              ["/perks", "View all premium features and perks"],
-              ["/features", "Toggle server features on/off"],
-          ],
-      },
-  ];
+    {
+        key: "moderation",
+        label: "Moderation",
+        commands: [
+            ["/ban", "Ban a member"],
+            ["/kick", "Kick a member"],
+            ["/mute", "Timeout a member"],
+            ["/unmute", "Remove a timeout"],
+            ["/warn", "Warn a member"],
+            ["/warnings", "View member warnings"],
+            ["/clearwarn", "Clear warnings"],
+            ["/purge", "Bulk delete messages"],
+            ["/lock", "Lock a channel"],
+            ["/unlock", "Unlock a channel"],
+            ["/slowmode", "Set channel slowmode"],
+            ["/automod", "Configure automatic moderation"],
+        ],
+    },
+    {
+        key: "server",
+        label: "Server Tools",
+        commands: [
+            ["/ticket", "Configure and manage support tickets"],
+            ["/reactionroles", "Create reaction role menus"],
+            ["/giveaway", "Create and manage giveaways"],
+            ["/logs", "Configure server logs"],
+            ["/welcome", "Configure welcome messages"],
+            ["/channel", "Manage channels"],
+            ["/role", "Manage roles"],
+            ["/customize", "Customize bot embeds"],
+            ["/setprefix", "Change prefix command prefix"],
+            ["/noprefix", "Manage premium no-prefix access"],
+        ],
+    },
+    {
+        key: "info",
+        label: "Info",
+        commands: [
+            ["/help", "Show this help center"],
+            ["/setupcheck", "Check bot setup and permissions"],
+            ["/ping", "Check bot latency"],
+            ["/botinfo", "View bot stats"],
+            ["/serverinfo", "View server information"],
+            ["/userinfo", "View user information"],
+            ["/avatar", "View a user avatar"],
+            ["/banner", "View a user banner"],
+            ["/invite", "Get the bot invite link"],
+        ],
+    },
+    {
+        key: "utility",
+        label: "Utility and Fun",
+        commands: [
+            ["/profile", "View your community profile"],
+            ["/rank", "View your server rank"],
+            ["/daily", "Claim daily coins and XP"],
+            ["/afk", "Set AFK status"],
+            ["/remind", "Create reminders"],
+            ["/poll", "Create polls"],
+            ["/embed", "Build embeds"],
+            ["/translate", "Translate text"],
+            ["/math", "Calculate expressions"],
+            ["/color", "Preview a color"],
+            ["/snipe", "Show the last deleted message"],
+            ["/8ball", "Ask the magic 8-ball"],
+            ["/coinflip", "Flip a coin"],
+            ["/dice", "Roll dice"],
+        ],
+    },
+    {
+        key: "premium",
+        label: "Premium",
+        commands: [
+            ["/premium", "Manage premium access"],
+            ["/premiumadmin", "View premium administration tools"],
+            ["/freetrial", "Grant a free trial"],
+        ],
+    },
+];
 
-  export function getHelpCategory(key) {
-      return helpCategories.find((c) => c.key === key) ?? null;
-  }
+export const prefixCommandNames = new Set([
+    "8ball",
+    "afk",
+    "avatar",
+    "ban",
+    "banner",
+    "channel",
+    "clearwarn",
+    "coinflip",
+    "daily",
+    "dice",
+    "giveaway",
+    "help",
+    "invite",
+    "kick",
+    "lock",
+    "math",
+    "mute",
+    "ping",
+    "poll",
+    "profile",
+    "purge",
+    "rank",
+    "remind",
+    "role",
+    "serverinfo",
+    "setprefix",
+    "setupcheck",
+    "slowmode",
+    "snipe",
+    "translate",
+    "unban",
+    "unlock",
+    "unmute",
+    "userinfo",
+    "warn",
+    "warnings",
+]);
 
-  export function formatCommands(cmds) {
-      return cmds.map(([name, desc]) => `\`${name}\` — ${desc}`).join("\n");
-  }
+export const noPrefixBlockedCommandNames = new Set([
+    "8ball",
+    "coinflip",
+    "dice",
+    "premium",
+    "premiumadmin",
+    "freetrial",
+    "noprefix",
+]);
 
-  // Commands that cannot be used in no-prefix mode for security reasons
-  export const noPrefixBlockedCommandNames = new Set([
-      "premium", "premiumadmin", "noprefix", "antinuke",
-  ]);
+export function getHelpCategory(key) {
+    return helpCategories.find((category) => category.key === key);
+}
+
+export function formatCommands(commands, prefix = "/") {
+    return commands.map(([name, description]) => {
+        const commandName = prefix === "/" ? name : `${prefix}${name.slice(1)}`;
+        return `\`${commandName}\` — ${description}`;
+    }).join("\n");
+}
+
+export function getPrefixHelpCategories() {
+    return helpCategories
+        .map((category) => ({
+            ...category,
+            commands: category.commands.filter(([name]) => prefixCommandNames.has(name.slice(1))),
+        }))
+        .filter((category) => category.commands.length > 0);
+}
