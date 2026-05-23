@@ -399,6 +399,18 @@ export const verificationSettingsTable = pgTable("verification_settings", {
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// ── Starboard Entries ─────────────────────────────────────────────────────────
+
+export const starboardEntriesTable = pgTable("starboard_entries", {
+    messageId: text("message_id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    channelId: text("channel_id").notNull(),
+    authorId: text("author_id").notNull(),
+    starboardMessageId: text("starboard_message_id"),
+    starCount: integer("star_count").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // ── AI Assistant Audit Log ────────────────────────────────────────────────────
 
 export const aiAssistantLogsTable = pgTable("ai_assistant_logs", {
