@@ -16,9 +16,18 @@ import { request as httpRequest } from "http";
 export const data = new SlashCommandBuilder()
     .setName("topggtest")
     .setDescription("[Owner] Fire a fake Top.gg vote to test the full webhook + reward flow")
+    .addStringOption((opt) =>
+        opt.setName("mode")
+            .setDescription("'ping' = connectivity check only, 'full' = simulate a real vote with rewards (default)")
+            .setRequired(false)
+            .addChoices(
+                { name: "ping — just verify the webhook is reachable (no DB writes)", value: "ping" },
+                { name: "full — simulate a real upvote and process all rewards", value: "full" },
+            )
+    )
     .addUserOption((opt) =>
         opt.setName("user")
-            .setDescription("Who to simulate the vote for (defaults to you)")
+            .setDescription("Who to simulate the vote for (defaults to you). Only used in full mode.")
             .setRequired(false)
     );
 
@@ -32,26 +41,43 @@ export async function execute(interaction) {
         return interaction.reply({ content: "❌ Bot owners only.", ephemeral: true });
     }
 
+    const mode = interaction.options.getString("mode") ?? "full";
     const target = interaction.options.getUser("user") ?? interaction.user;
     await interaction.deferReply({ ephemeral: true });
 
     const port = parseInt(process.env.PORT ?? "3000", 10);
     const secret = (process.env.TOPGG_WEBHOOK_SECRET ?? "").trim();
 
-    // ── POST to local webhook endpoint ────────────────────────────────────────
-    const body = JSON.stringify({ user: target.id, type: "upvote" });
+    if (!secret) {
+        await interaction.editReply({
+            embeds: [new EmbedBuilder()
+                .setColor(0xfee75c)
+                .setTitle("⚠️ TOPGG_WEBHOOK_SECRET not set")
+                .setDescription("Set `TOPGG_WEBHOOK_SECRET` in your `.env` to match the password in your Top.gg dashboard. Without it, anyone can trigger your webhook.")
+                .setTimestamp()],
+        });
+        return;
+    }
+
+    // ── Build request ──────────────────────────────────────────────────────────
+    const isPing = mode === "ping";
+    const body = JSON.stringify(
+        isPing
+            ? { user: "0", type: "test" }
+            : { user: target.id, type: "upvote" }
+    );
 
     const statusCode = await new Promise((resolve, reject) => {
         const headers = {
             "Content-Type": "application/json",
             "Content-Length": Buffer.byteLength(body),
+            "Authorization": secret,
         };
-        if (secret) headers["Authorization"] = secret;
 
         const req = httpRequest(
             { hostname: "127.0.0.1", port, path: "/topgg/webhook", method: "POST", headers },
             (res) => {
-                res.resume(); // drain the body
+                res.resume();
                 res.on("end", () => resolve(res.statusCode));
             }
         );
@@ -65,19 +91,32 @@ export async function execute(interaction) {
 
     const embed = new EmbedBuilder()
         .setColor(ok ? 0x57f287 : 0xed4245)
-        .setTitle(ok ? "✅ Test Vote Fired" : "❌ Test Vote Failed")
-        .setDescription(
-            ok
-                ? `Simulated an upvote from **${target.tag}**.\n\nThe vote is being processed async — check:\n• Your bot console logs for `[TopGG]` output\n• The vote log channel (if set)\n• Your own DMs (if the bot can reach you)`
-                : `Webhook POST failed: \`${statusCode}\`\n\nMake sure the HTTP server is up and \`PORT\` matches.`
-        )
-        .addFields(
-            { name: "Simulated User", value: `${target.tag} (${target.id})`, inline: true },
-            { name: "HTTP Status", value: String(statusCode), inline: true },
-            { name: "Endpoint", value: `http://127.0.0.1:${port}/topgg/webhook`, inline: false },
-        )
-        .setFooter({ text: "This is a test — no actual vote was registered on Top.gg" })
-        .setTimestamp();
+        .setTimestamp()
+        .setFooter({ text: "This is a test — no actual vote was registered on Top.gg" });
+
+    if (isPing) {
+        embed
+            .setTitle(ok ? "✅ Webhook Reachable" : "❌ Webhook Unreachable")
+            .setDescription(ok
+                ? `The webhook endpoint responded with **200 OK**.\nTop.gg can reach your bot — connectivity is working!`
+                : `Webhook POST failed: \`${statusCode}\`\n\nCheck that the HTTP server started and \`PORT\` is correct.`
+            );
+    } else {
+        embed
+            .setTitle(ok ? "✅ Full Vote Simulated" : "❌ Vote Simulation Failed")
+            .setDescription(ok
+                ? `Simulated a full upvote from **${target.tag}**.\n\nProcessing is async — check:\n• Bot console for \`[TopGG]\` lines\n• Your vote log channel (if configured)\n• **${target.tag}**'s DMs (bot must be able to DM them)`
+                : `Webhook POST failed: \`${statusCode}\`\n\nCheck that the HTTP server started and \`PORT\` is correct.`
+            )
+            .addFields(
+                { name: "Simulated User", value: `${target.tag} (${target.id})`, inline: true },
+            );
+    }
+
+    embed.addFields(
+        { name: "HTTP Status", value: String(statusCode), inline: true },
+        { name: "Endpoint", value: `http://127.0.0.1:${port}/topgg/webhook`, inline: true },
+    );
 
     await interaction.editReply({ embeds: [embed] });
 }
