@@ -4,6 +4,7 @@ import { db, warningsTable } from "../db/index.js";
 import { eq, and, count } from "drizzle-orm";
 export const command = {
     name: "warn",
+    aliases: ["w"],
     usage: "%warn @user <reason>",
     description: "Warn a member",
     async execute(message, args) {
