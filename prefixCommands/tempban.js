@@ -7,6 +7,7 @@ import { sendModLog } from "../utils/modLog.js";
 
 export const command = {
     name: "tempban",
+    aliases: ["tb"],
     usage: "%tempban <@user> <duration> [reason]",
     description: "Temporarily ban a member (e.g. %tempban @user 7d spamming)",
     async execute(message, args) {
