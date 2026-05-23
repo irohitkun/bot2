@@ -86,6 +86,7 @@ export const memberStatsTable = pgTable("member_stats", {
     dailyStreak: integer("daily_streak").notNull().default(0),
     lastDailyAt: timestamp("last_daily_at"),
     lastChatXpAt: timestamp("last_chat_xp_at"),
+    messageCount: integer("message_count").notNull().default(0),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.guildId, t.userId] })]);
