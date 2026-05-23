@@ -4,6 +4,7 @@ import { db, warningsTable } from "../db/index.js";
 import { eq, and, count } from "drizzle-orm";
 export const command = {
     name: "clearwarn",
+    aliases: ["cw", "warnreset"],
     usage: "%clearwarn @user",
     description: "Clear all warnings for a member",
     async execute(message, args) {
