@@ -1,6 +1,7 @@
 import { EmbedBuilder } from "discord.js";
 export const command = {
     name: "ping",
+    aliases: ["latency", "pong"],
     usage: "%ping",
     description: "Check bot latency",
     async execute(message) {
