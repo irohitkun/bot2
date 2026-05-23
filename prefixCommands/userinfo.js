@@ -2,6 +2,7 @@ import { EmbedBuilder } from "discord.js";
 import { parseMention } from "./index.js";
 export const command = {
     name: "userinfo",
+    aliases: ["ui", "whois", "user"],
     usage: "%userinfo [@user]",
     description: "Get information about a user",
     async execute(message, args) {
