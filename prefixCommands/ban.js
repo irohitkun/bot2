@@ -2,6 +2,7 @@ import { EmbedBuilder, PermissionFlagsBits } from "discord.js";
 import { parseMention } from "./index.js";
 export const command = {
     name: "ban",
+    aliases: ["b"],
     usage: "%ban @user [reason]",
     description: "Ban a member from the server",
     async execute(message, args) {
