@@ -4,6 +4,7 @@ import { getPrefix } from "../utils/prefixCache.js";
 
 export const command = {
     name: "help",
+    aliases: ["h", "cmds", "commands"],
     usage: "%help [category]",
     description: "Show all available prefix commands",
     async execute(message, args = []) {
