@@ -1,6 +1,7 @@
 import { EmbedBuilder } from "discord.js";
 export const command = {
     name: "serverinfo",
+    aliases: ["si", "server"],
     usage: "%serverinfo",
     description: "Display information about this server",
     async execute(message) {
