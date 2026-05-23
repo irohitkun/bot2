@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from "url";
 import { getPrefix, getNoPrefixMode } from "../utils/prefixCache.js";
 import { canUseNoPrefix } from "../utils/noPrefixAccess.js";
 import { db, afkUsersTable, automodSettingsTable } from "../db/index.js";
-import { awardChatXp } from "../utils/community.js";
+import { awardChatXp, incrementMessageCount } from "../utils/community.js";
 import { noPrefixBlockedCommandNames } from "../utils/helpCatalog.js";
 import { eq, and } from "drizzle-orm";
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -34,6 +34,8 @@ export async function execute(message) {
     if (!message.guild)
         return;
     const guildId = message.guild.id;
+    // Count every non-bot guild message (fire-and-forget, never blocks the handler)
+    incrementMessageCount(guildId, message.author).catch(() => {});
     const [afkEntry] = await db.select().from(afkUsersTable).where(and(eq(afkUsersTable.userId, message.author.id), eq(afkUsersTable.guildId, guildId)));
     if (afkEntry) {
         await db.delete(afkUsersTable).where(and(eq(afkUsersTable.userId, message.author.id), eq(afkUsersTable.guildId, guildId)));
