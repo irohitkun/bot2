@@ -2,6 +2,7 @@ import { EmbedBuilder, PermissionFlagsBits } from "discord.js";
 import { parseMention } from "./index.js";
 export const command = {
     name: "unmute",
+    aliases: ["um", "untimeout"],
     usage: "%unmute @user [reason]",
     description: "Remove timeout from a member",
     async execute(message, args) {
