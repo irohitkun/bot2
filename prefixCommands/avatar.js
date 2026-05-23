@@ -2,6 +2,7 @@ import { EmbedBuilder } from "discord.js";
 import { parseMention } from "./index.js";
 export const command = {
     name: "avatar",
+    aliases: ["av", "pfp", "icon"],
     usage: "%avatar [@user]",
     description: "Display a user's avatar",
     async execute(message, args) {
