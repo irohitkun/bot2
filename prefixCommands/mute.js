@@ -2,6 +2,7 @@ import { EmbedBuilder, PermissionFlagsBits } from "discord.js";
 import { parseMention, parseDuration } from "./index.js";
 export const command = {
     name: "mute",
+    aliases: ["m", "timeout"],
     usage: "%mute @user <duration> [reason]",
     description: "Timeout (mute) a member",
     async execute(message, args) {
