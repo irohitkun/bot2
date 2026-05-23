@@ -1,6 +1,7 @@
 import { EmbedBuilder, PermissionFlagsBits } from "discord.js";
 export const command = {
     name: "unban",
+    aliases: ["ub"],
     usage: "%unban <userID> [reason]",
     description: "Unban a user by ID",
     async execute(message, args) {
