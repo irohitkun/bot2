@@ -5,7 +5,6 @@ import { isPremiumGuild, premiumDeniedEmbed, getPremiumTip } from "../utils/perm
 import {
     scheduleGiveawayEnd,
     pickGiveawayWinners,
-    buildRequirementsBlock,
 } from "../utils/giveawayScheduler.js";
 import { parseDuration } from "../utils/duration.js";
 
@@ -20,16 +19,29 @@ function parseGiveawayDuration(input) {
 }
 
 function buildStartEmbed(row, hostTag) {
+    const endTs = Math.floor(row.endsAt.getTime() / 1000);
+    const lines = [
+        "React with 🎉 to enter the giveaway.",
+        "",
+        `**Ends:** <t:${endTs}:F> (<t:${endTs}:R>)`,
+        `**Winners:** ${row.winnersCount}`,
+        `**Hosted by:** ${hostTag}`,
+    ];
+
+    // Requirements / bonus entries block
+    const reqLines = [];
+    if (row.requiredRoleId) reqLines.push(`☑ Must have <@&${row.requiredRoleId}>`);
+    if (row.minAccountAgeDays && row.minAccountAgeDays > 0)
+        reqLines.push(`☑ Account must be **${row.minAccountAgeDays}d+** old`);
+    const bonusRoles = (row.bonusRoleIds ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    if (bonusRoles.length > 0 && row.bonusEntries > 0)
+        reqLines.push(`★ ${bonusRoles.map((id) => `<@&${id}>`).join(", ")} → **+${row.bonusEntries}** extra entr${row.bonusEntries === 1 ? "y" : "ies"}`);
+    if (reqLines.length > 0) lines.push("", "**Requirements**", ...reqLines);
+
     return new EmbedBuilder()
-        .setColor(0xf1c40f)
-        .setTitle("🎉 GIVEAWAY 🎉")
-        .setDescription(
-            `**Prize:** ${row.prize}\n\nReact with 🎉 to enter!\n\n` +
-            `**Ends:** <t:${Math.floor(row.endsAt.getTime() / 1000)}:R>\n` +
-            `**Winners:** ${row.winnersCount}` +
-            buildRequirementsBlock(row),
-        )
-        .setFooter({ text: `Hosted by ${hostTag}` })
+        .setColor(0x5865f2)
+        .setTitle(row.prize)
+        .setDescription(lines.join("\n"))
         .setTimestamp(row.endsAt);
 }
 
@@ -38,7 +50,7 @@ export const data = new SlashCommandBuilder()
     .setDescription("Manage giveaways")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand((sub) => sub.setName("start").setDescription("Start a giveaway")
-        .addStringOption((o) => o.setName("prize").setDescription("What are you giving away?").setRequired(true))
+        .addStringOption((o) => o.setName("prize").setDescription("What are you giving away? e.g. Discord Nitro, $10 Gift Card, Steam Key, Server Perks").setRequired(true))
         .addStringOption((o) => o.setName("duration").setDescription("Duration e.g. 10m, 1h, 1d12h (max 30d)").setRequired(true))
         .addIntegerOption((o) => o.setName("winners").setDescription("Number of winners (default 1)").setMinValue(1).setMaxValue(20).setRequired(false))
         .addChannelOption((o) => o.setName("channel").setDescription("Channel to post in (defaults to current)").setRequired(false))
