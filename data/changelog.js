@@ -7,6 +7,42 @@
  */
 export const CHANGELOG = [
     {
+        version: "2.10",
+        title: "Nuke, Purge Bots & Giveaway Overhaul",
+        date: "2026-05-24",
+        color: 0x5865f2,
+        sections: {
+            added: [
+                "**Nuke command** — `/nuke` and `%nuke` (alias `%nk`). Before doing anything it shows a small confirmation embed with **Nuke it** and **Cancel** buttons. On confirm it clones the channel — preserving the name, topic, slowmode, category, position, and every permission overwrite — deletes the original, then sends `first` in the clean channel. Your locks stay exactly as they were.",
+                "**Purge bots** — new subcommand on both `/purge` and `%purge`. Scans the last 100 messages (or however many you specify) and bulk-deletes anything sent by a bot. Handy for clearing out command spam after a busy session.",
+            ],
+            changed: [
+                "**Giveaway embed redesign** — the prize is now the embed title instead of buried in the description. Ends time, winners count, and hosted by each have their own bolded line. The requirements block (required role, account age, bonus entries) is cleaner too — `☑` for restrictions, `★` for bonus entries. Looks like an actual giveaway now.",
+            ],
+            fixed: [
+                "**`/customize avatar`** — the avatar was being set correctly but the success embed was showing the old avatar URL. Discord's CDN hasn't propagated the change yet by the time the bot re-fetches the member, so the thumbnail was just wrong. It now shows the uploaded image directly and includes a note that it can take up to 60 seconds to visually update in Discord. Also switched the internal API call to the `@me` endpoint which is the correct one for self guild member updates.",
+            ],
+        },
+    },
+    {
+        version: "2.9",
+        title: "Time Tracking, Message Counter & Shortcuts",
+        date: "2026-05-22",
+        color: 0x5865f2,
+        sections: {
+            added: [
+                "**`/timediff`** — paste any Discord message ID and it tells you exactly when it was sent and how long ago that was. Pass two message IDs and you get the time between them. Also accepts Unix timestamps, relative inputs like `3d ago`, and regular date strings. Prefix version works too: `%timediff` with aliases `%td` and `%tdiff`.",
+                "**`/msgcount`** — per-user message tracking with a server leaderboard. Use `/msgcount @user` for a specific person or `/msgcount leaderboard` for the top 10. Also available as `%messages` and `%mc`. Counts start from the first time the bot sees a message — nothing historical gets added.",
+                "**More prefix shortcuts** — added `%b` for ban, `%k` for kick, `%m` for mute, `%gw` for giveaway, `%tb` for tempban, `%lb` for leaderboard, and a few others. Full list in `%help`.",
+            ],
+            fixed: [
+                "**Top.gg vote webhook** — incoming votes were being silently dropped instead of registering. They go through correctly now.",
+                "**Vote streak logic** — had an edge case that was resetting streaks that should have carried over. More reliable now.",
+                "**Giveaway reroll** — the original host could end up winning their own giveaway on a reroll. They're excluded from the pool now.",
+            ],
+        },
+    },
+    {
         version: "2.8",
         title: "Quality of Life & Cleanup",
         date: "2026-05-20",
