@@ -25,6 +25,11 @@ export const data = new SlashCommandBuilder()
         sub.setName("from")
             .setDescription("Delete all messages after a specific message ID up to now")
             .addStringOption((o) => o.setName("message_id").setDescription("Delete all messages after this message ID").setRequired(true))
+            .addChannelOption((o) => o.setName("channel").setDescription("Channel to purge (defaults to current)").setRequired(false)))
+    .addSubcommand((sub) =>
+        sub.setName("bots")
+            .setDescription("Delete recent bot messages in this channel")
+            .addIntegerOption((o) => o.setName("scan").setDescription("How many messages to scan (1–100, default 100)").setMinValue(1).setMaxValue(100).setRequired(false))
             .addChannelOption((o) => o.setName("channel").setDescription("Channel to purge (defaults to current)").setRequired(false)));
 
 export async function execute(interaction) {
@@ -33,6 +38,7 @@ export async function execute(interaction) {
     if (sub === "user")   return handleUser(interaction);
     if (sub === "until")  return handleUntil(interaction);
     if (sub === "from")   return handleFrom(interaction);
+    if (sub === "bots")   return handleBots(interaction);
 }
 
 async function handleAmount(interaction) {
@@ -113,6 +119,22 @@ async function handleFrom(interaction) {
 
     const deleted = await channel.bulkDelete(toDelete, true);
     return interaction.editReply({ embeds: [purgeEmbed(deleted.size, channel, interaction.user.tag, `From: \`${messageId}\``)] });
+}
+
+async function handleBots(interaction) {
+    await interaction.deferReply({ flags: 64 });
+    const scan = interaction.options.getInteger("scan") ?? 100;
+    const channel = interaction.options.getChannel("channel") ?? interaction.channel;
+
+    const fetched = await channel.messages.fetch({ limit: scan });
+    const toDelete = [...fetched.values()].filter(
+        (m) => m.author.bot && m.createdTimestamp > Date.now() - TWO_WEEKS
+    );
+    if (toDelete.length === 0)
+        return interaction.editReply(`❌ No bot messages found in the last ${scan} messages (or all are older than 14 days).`);
+
+    const deleted = await channel.bulkDelete(toDelete, true);
+    return interaction.editReply({ embeds: [purgeEmbed(deleted.size, channel, interaction.user.tag, "Bots only")] });
 }
 
 function purgeEmbed(count, channel, moderatorTag, detail) {
