@@ -102,32 +102,48 @@ export async function execute(interaction) {
 
         try {
             let avatarData = null;
+            // Keep the original source URL to display in the success embed —
+            // we can't rely on re-fetching the member because Discord's CDN
+            // takes time to propagate the new hash, so displayAvatarURL()
+            // often still returns the old image immediately after the PATCH.
+            const sourceUrl = attachment?.proxyURL ?? (isReset ? null : urlInput);
+
             if (!isReset) {
-                const imageUrl = attachment?.url ?? urlInput;
-                avatarData = await imageToBase64(imageUrl, attachment?.contentType ?? "image/png");
+                avatarData = await imageToBase64(sourceUrl, attachment?.contentType ?? "image/png");
             }
 
-            await client.rest.patch(Routes.guildMember(guildId, client.user.id), {
+            // Use @me explicitly — this is the canonical endpoint for the bot's
+            // own guild member record and is what other bots (Bleed, etc.) use.
+            await client.rest.patch(Routes.guildMember(guildId, "@me"), {
                 body: { avatar: avatarData },
             });
 
-            // Force-fetch to bypass cache and get the updated avatar hash
-            const botMember = await interaction.guild.members.fetch({ user: client.user.id, force: true });
-            const newAvatarUrl = botMember.displayAvatarURL({ size: 256 });
-
+            const style = await getGuildStyle(guildId);
             const embed = new EmbedBuilder()
-                .setColor((await getGuildStyle(guildId)).color)
+                .setColor(style.color)
                 .setTitle(isReset ? "✅ Avatar Reset" : "✅ Server Avatar Updated")
                 .setDescription(
                     isReset
                         ? "The bot's profile picture has been reverted to its global default in this server."
-                        : "The bot now has a custom profile picture in this server. Other servers are unaffected.",
-                )
-                .setThumbnail(newAvatarUrl)
-                .setTimestamp();
+                        : "The bot now has a custom profile picture in this server. Other servers are unaffected.\n\n⏳ **It may take up to 60 seconds to appear** — Discord's CDN caches avatars on the client side. If it still looks unchanged after a minute, try restarting your Discord app.",
+                );
+
+            // Show the uploaded image directly — this is immediately visible
+            // and confirms the correct image was sent, regardless of CDN delay.
+            if (!isReset && sourceUrl) embed.setThumbnail(sourceUrl);
+
+            embed.setTimestamp();
             return interaction.editReply({ embeds: [embed] });
         } catch (err) {
-            return interaction.editReply({ content: `❌ Failed to update avatar: ${err?.message ?? "Unknown error"}` });
+            const msg = err?.message ?? "Unknown error";
+            // Provide actionable hints for the most common API errors
+            let hint = "";
+            if (msg.includes("50035") || msg.includes("Invalid Form Body")) {
+                hint = "\n\nThe image may be too large. Try an image under **1 MB**.";
+            } else if (msg.includes("50013") || msg.includes("Missing Permissions")) {
+                hint = "\n\nThe bot is missing permissions to update its own guild member.";
+            }
+            return interaction.editReply({ content: `❌ Failed to update avatar: ${msg}${hint}` });
         }
     }
 
