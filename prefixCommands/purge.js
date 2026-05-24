@@ -9,6 +9,7 @@ export const command = {
     usage: [
         "%purge <1-100> [@user]         — delete last N messages",
         "%purge user <@user> [amount]   — delete a user's recent messages",
+        "%purge bots [amount]           — delete bot messages only",
         "%purge until <message_id>      — delete back to a message ID",
         "%purge from <message_id>       — delete messages after a message ID",
     ].join("\n"),
@@ -105,6 +106,24 @@ export const command = {
             }
             const deleted = await channel.bulkDelete(toDelete, true);
             return void sendResult(channel, deleted.size, `From \`${messageId}\``);
+        }
+
+        // ── purge bots [amount] ─────────────────────────────────────────────
+        if (sub === "bots") {
+            const scan = Math.min(100, Math.max(1, parseInt(args[1] ?? "100", 10) || 100));
+            await message.delete().catch(() => {});
+            const channel = message.channel;
+            const fetched = await channel.messages.fetch({ limit: scan });
+            const toDelete = [...fetched.values()].filter(
+                (m) => m.author.bot && m.createdTimestamp > Date.now() - TWO_WEEKS
+            );
+            if (toDelete.length === 0) {
+                const warn = await channel.send(`❌ No bot messages found in the last ${scan} messages.`);
+                setTimeout(() => warn.delete().catch(() => {}), 4000);
+                return;
+            }
+            const deleted = await channel.bulkDelete(toDelete, true);
+            return void sendResult(channel, deleted.size, "Bots only");
         }
 
         // ── purge <amount> [@user] — default ───────────────────────────────
