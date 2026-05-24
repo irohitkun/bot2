@@ -1,15 +1,19 @@
 import { EmbedBuilder } from "discord.js";
 
-function parseTimeInput(input) {
-    if (!input) return Date.now();
-    input = input.trim();
+function snowflakeToMs(id) {
+    return Number((BigInt(id) >> 22n) + 1420070400000n);
+}
+function isSnowflake(input) {
+    return /^\d{17,19}$/.test((input ?? "").trim());
+}
 
+function parseTimeInput(input) {
+    input = input.trim();
+    if (isSnowflake(input)) return snowflakeToMs(input);
     const discordMatch = input.match(/^<t:(\d+)(?::[RrDdFfTt])?>$/);
     if (discordMatch) return parseInt(discordMatch[1], 10) * 1000;
-
     if (/^\d{10}$/.test(input)) return parseInt(input, 10) * 1000;
     if (/^\d{13}$/.test(input)) return parseInt(input, 10);
-
     const relMatch = input.match(/^(?:in\s+)?(\d+)\s*(s|sec|m|min|h|hr|d|day|w|wk|mo|month|y|yr)s?\s*(ago)?$/i);
     if (relMatch) {
         const val = parseInt(relMatch[1], 10);
@@ -22,7 +26,6 @@ function parseTimeInput(input) {
         const delta = val * (multipliers[unit] ?? 0);
         return relMatch[3] ? Date.now() - delta : Date.now() + delta;
     }
-
     const parsed = Date.parse(input);
     if (!isNaN(parsed)) return parsed;
     return null;
@@ -30,66 +33,93 @@ function parseTimeInput(input) {
 
 function formatDuration(totalMs) {
     const abs = Math.abs(totalMs);
-    const s = Math.floor(abs / 1000);
-    const m = Math.floor(s / 60);
-    const h = Math.floor(m / 60);
-    const d = Math.floor(h / 24);
-    const mo = Math.floor(d / 30.44);
-    const y = Math.floor(d / 365.25);
-
+    const secs = Math.floor(abs / 1000) % 60;
+    const mins = Math.floor(abs / 60000) % 60;
+    const hrs = Math.floor(abs / 3600000) % 24;
+    const days = Math.floor(abs / 86400000);
     const parts = [];
-    if (y > 0) { parts.push(`${y}y`); if (mo % 12) parts.push(`${mo % 12}mo`); }
-    else if (mo > 0) { parts.push(`${mo}mo`); if (d % 30) parts.push(`${Math.round(d % 30.44)}d`); }
-    else if (d > 0) { parts.push(`${d}d`); if (h % 24) parts.push(`${h % 24}h`); if (m % 60) parts.push(`${m % 60}m`); }
-    else if (h > 0) { parts.push(`${h}h`); if (m % 60) parts.push(`${m % 60}m`); if (s % 60) parts.push(`${s % 60}s`); }
-    else if (m > 0) { parts.push(`${m}m`); if (s % 60) parts.push(`${s % 60}s`); }
-    else parts.push(`${s}s`);
-    return parts.join(" ") || "0s";
+    if (days > 0) parts.push(`${days} day${days !== 1 ? "s" : ""}`);
+    if (hrs > 0) parts.push(`${hrs} hour${hrs !== 1 ? "s" : ""}`);
+    if (mins > 0) parts.push(`${mins} minute${mins !== 1 ? "s" : ""}`);
+    if (secs > 0 || parts.length === 0) parts.push(`${secs} second${secs !== 1 ? "s" : ""}`);
+    return parts.join(", ");
 }
 
 export const command = {
     name: "timediff",
     aliases: ["td", "tdiff", "elapsed"],
-    usage: "%timediff <from> [to]  — e.g. %timediff 3d ago  |  %timediff 2025-01-01 2025-06-01",
-    description: "Calculate the time difference between two points in time",
+    usage: [
+        "%timediff <messageID>              — when it was sent vs now",
+        "%timediff <messageID1> <messageID2> — diff between two messages",
+        "%timediff <messageID> | <time>     — diff between message and any time",
+        "%timediff 3d ago                   — diff from 3 days ago until now",
+    ],
+    description: "Calculate the time difference between two message IDs, timestamps, or dates",
     async execute(message, args) {
         if (args.length === 0) {
             return void message.reply(
                 "**Usage:**\n" +
-                "`%timediff <from>` — time since *from* until now\n" +
-                "`%timediff <from> | <to>` — time between *from* and *to*\n\n" +
-                "**Accepted formats:** `<t:1234567890>`, unix timestamp, `3d ago`, `in 2h`, `2025-01-15`, `Jan 15 2025`"
+                "`%timediff <messageID>` — when it was sent vs now\n" +
+                "`%timediff <id1> <id2>` — diff between two message IDs\n" +
+                "`%timediff <from> | <to>` — any two times (IDs, unix, `3d ago`, dates)\n\n" +
+                "**Examples:**\n" +
+                "`%timediff 1507794891235786914`\n" +
+                "`%timediff 1507794891235786914 1507795000000000000`\n" +
+                "`%td 3d ago`"
             );
         }
 
-        // Split on " | " to allow two arguments with spaces
-        const joined = args.join(" ");
-        const [fromRaw, toRaw] = joined.split(/\s*\|\s*/);
-
-        const fromMs = parseTimeInput(fromRaw?.trim() ?? "");
-        const toMs = parseTimeInput(toRaw?.trim() ?? null);
-
-        if (fromMs === null) {
-            return void message.reply(`❌ Couldn't parse time: \`${fromRaw}\`\nUse: unix timestamp, \`3d ago\`, \`2025-01-15\`, or a Discord \`<t:UNIX>\` tag.`);
+        // Two adjacent snowflake-looking args → treat as two message IDs
+        let firstRaw, secondRaw;
+        if (args.length >= 2 && isSnowflake(args[0]) && isSnowflake(args[1])) {
+            firstRaw = args[0];
+            secondRaw = args[1];
+        } else {
+            // Allow pipe separator for multi-word times: "Jan 1 2025 | Jan 1 2026"
+            const joined = args.join(" ");
+            const parts = joined.split(/\s*\|\s*/);
+            firstRaw = parts[0]?.trim();
+            secondRaw = parts[1]?.trim() ?? null;
         }
-        if (toMs === null) {
-            return void message.reply(`❌ Couldn't parse time: \`${toRaw}\`\nUse: unix timestamp, \`3d ago\`, \`2025-01-15\`, or a Discord \`<t:UNIX>\` tag.`);
-        }
 
-        const diffMs = toMs - fromMs;
-        const isFuture = diffMs > 0;
-        const fromSec = Math.floor(fromMs / 1000);
-        const toSec = Math.floor(toMs / 1000);
+        const firstMs = parseTimeInput(firstRaw);
+        if (firstMs === null)
+            return void message.reply(`❌ Couldn't parse: \`${firstRaw}\`\nAccepted: message ID, unix timestamp, \`<t:UNIX>\`, \`3d ago\`, \`2025-01-15\``);
+
+        // Second defaults to the command invocation message timestamp
+        const secondMs = secondRaw ? parseTimeInput(secondRaw) : message.createdTimestamp;
+        if (secondMs === null)
+            return void message.reply(`❌ Couldn't parse: \`${secondRaw}\``);
+
+        const diffMs = secondMs - firstMs;
+        const firstSec = Math.floor(firstMs / 1000);
+        const secondSec = Math.floor(secondMs / 1000);
+        const firstIsId = isSnowflake(firstRaw);
+        const secondIsId = secondRaw && isSnowflake(secondRaw);
+
+        let footerText;
+        if (firstIsId && secondIsId) footerText = "Showing difference between the two message IDs";
+        else if (firstIsId && !secondRaw) footerText = "Showing difference between given ID and command message ID";
+        else if (firstIsId) footerText = "Showing difference between given ID and second time";
+        else footerText = "Showing time difference";
 
         const embed = new EmbedBuilder()
-            .setColor(isFuture ? 0x5865f2 : 0xf1c40f)
-            .setTitle("⏱️ Time Difference")
+            .setColor(0x5865f2)
+            .setTitle("Time Difference")
+            .setDescription(`**${formatDuration(diffMs)}**${diffMs < 0 ? " (first is after second)" : ""}`)
             .addFields(
-                { name: "From", value: `<t:${fromSec}:F>  (<t:${fromSec}:R>)`, inline: false },
-                { name: toRaw ? "To" : "To (now)", value: `<t:${toSec}:F>  (<t:${toSec}:R>)`, inline: false },
-                { name: "Difference", value: `**${formatDuration(diffMs)}** ${isFuture ? "later" : "earlier"}`, inline: true },
-                { name: "Exact ms", value: `${Math.abs(diffMs).toLocaleString()} ms`, inline: true },
+                {
+                    name: firstIsId ? `${firstRaw}` : "First",
+                    value: `Sent <t:${firstSec}:F>`,
+                    inline: false,
+                },
+                {
+                    name: secondIsId ? `${secondRaw}` : (secondRaw ? "Second" : "Now"),
+                    value: `Sent <t:${secondSec}:F>`,
+                    inline: false,
+                },
             )
+            .setFooter({ text: footerText })
             .setTimestamp();
 
         return void message.reply({ embeds: [embed] });
