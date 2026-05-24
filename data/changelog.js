@@ -7,7 +7,7 @@
  */
 export const CHANGELOG = [
     {
-        version: "2.10",
+        version: "3.0",
         title: "Nuke, Purge Bots & Giveaway Overhaul",
         date: "2026-05-24",
         color: 0x5865f2,
