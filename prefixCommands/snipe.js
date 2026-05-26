@@ -2,7 +2,8 @@ import { EmbedBuilder } from "discord.js";
 import { getSnipe } from "../utils/snipeCache.js";
 export const command = {
     name: "snipe",
-    usage: "%snipe",
+    aliases: ["s"],
+    usage: "%snipe  |  %s",
     description: "Show the last deleted message in this channel",
     async execute(message) {
         const snipe = getSnipe(message.channelId);
@@ -11,6 +12,7 @@ export const command = {
         const embed = new EmbedBuilder().setColor(0xed4245).setTitle("🔍 Sniped Message")
             .setDescription(snipe.content || "*[no text content]*")
             .setAuthor({ name: snipe.authorTag, iconURL: snipe.authorAvatar ?? undefined })
+            .setFooter({ text: "Deleted" })
             .setTimestamp(snipe.deletedAt);
         if (snipe.imageUrl)
             embed.setImage(snipe.imageUrl);
