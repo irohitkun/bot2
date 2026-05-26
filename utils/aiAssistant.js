@@ -1165,6 +1165,39 @@ UTILITIES:
 • Cannot set up or modify J2C hubs — use /j2c setup (premium slash command). The word "panel" in a J2C context means /j2cpanel (voice channel owner controls) — never setup_ticket_panel.
 `.trim();
 
+function buildFaqDoc() {
+    const lines = ["=== FAQ & SETUP GUIDES (use these to answer how-to and troubleshooting questions) ===", ""];
+
+    if (Array.isArray(FEATURES.faq)) {
+        lines.push("── Frequently Asked Questions ──");
+        for (const entry of FEATURES.faq) {
+            lines.push(`Q: ${entry.q}`);
+            lines.push(`A: ${entry.a}`);
+            lines.push("");
+        }
+    }
+
+    if (FEATURES.setup_guides && typeof FEATURES.setup_guides === "object") {
+        lines.push("── Step-by-Step Setup Guides ──");
+        for (const guide of Object.values(FEATURES.setup_guides)) {
+            lines.push(`${guide.title}:`);
+            for (const step of guide.steps) {
+                lines.push(`  • ${step}`);
+            }
+            lines.push("");
+        }
+    }
+
+    if (FEATURES.troubleshooting && typeof FEATURES.troubleshooting === "object") {
+        lines.push("── Troubleshooting ──");
+        for (const [key, val] of Object.entries(FEATURES.troubleshooting)) {
+            lines.push(`• ${key}: ${val}`);
+        }
+    }
+
+    return lines.join("\n").trim();
+}
+
 function buildSystemPrompt(ctx) {
     const status = getAIStatus();
     return [
@@ -1172,23 +1205,26 @@ function buildSystemPrompt(ctx) {
         `Server: "${ctx.guild.name}" (id ${ctx.guild.id}). Operator: ${ctx.member.user.tag} (id ${ctx.member.id}). Channel: #${ctx.channel?.name ?? "?"}.`,
         `Provider: ${status.provider} / ${status.model}.`,
         ``,
-        `YOUR TWO JOBS:`,
+        `YOUR JOBS:`,
         `  1. Convert natural-language operator requests into a JSON action plan using the tools listed in TOOL_DOC.`,
         `  2. Answer capability questions ("what can you do?", "how do tickets work?", "can you ban people?") using the EXACT CAPABILITIES section — return {"actions":[],"summary":"<accurate answer>"}.`,
-        `  3. When asked to announce a feature, compose compelling embed text and use send_announcement.
-  4. When asked to "announce updates", "post the changelog", "share what's new", or "announce version X", use announce_changelog.`,
+        `  3. Answer setup and how-to questions ("how do I set up tickets?", "how does starboard work?", "why isn't X working?") using the FAQ & SETUP GUIDES section — return {"actions":[],"summary":"<step-by-step answer from the guides>"}.`,
+        `  4. When asked to announce a feature, compose compelling embed text and use send_announcement.`,
+        `  5. When asked to "announce updates", "post the changelog", "share what's new", or "announce version X", use announce_changelog.`,
         ``,
         BOT_CAPABILITIES_DOC,
+        ``,
+        buildFaqDoc(),
         ``,
         TOOL_DOC,
         ``,
         `OUTPUT RULES (strictly enforced):`,
         `- Reply ONLY with a single JSON object: {"actions":[{"tool":"...","args":{...}}, ...], "summary":"..."}`,
         `- Maximum ${MAX_ACTIONS} actions per plan.`,
-        `- For capability questions: return {"actions":[],"summary":"<accurate description from the capabilities doc above>"}.`,
+        `- For capability/how-to/troubleshooting questions: return {"actions":[],"summary":"<accurate answer from the docs above>"}.`,
         `- If the request is unclear, unsafe, or asks you to bypass safety: return {"actions":[],"summary":"<short reason>"}.`,
         `- Never escalate beyond what the operator literally asked for.`,
-        `- summary must be one clear sentence for actions, or a few bullet points for capability questions.`,
+        `- summary must be one clear sentence for actions, or a clear explanation for questions (use bullet points if listing steps).`,
         `- Output JSON ONLY — no Markdown, no code fences, no commentary outside the JSON.`,
     ].join("\n");
 }
