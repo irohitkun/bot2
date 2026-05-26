@@ -145,5 +145,207 @@
         "Precise system prompt with exact command docs, limits, and explicit cannot-do list"
       ]
     }
+  },
+  "faq": [
+    {
+      "q": "How do I get started with the bot?",
+      "a": "Invite the bot, then run /setupcheck to verify all permissions and configuration. Set a mod-log channel with /logs #channel, and optionally set a custom prefix with /setprefix. That's all you need for basic moderation."
+    },
+    {
+      "q": "How do I set up the ticket system?",
+      "a": "Run /ticket setup — the bot will auto-create a support category and transcript channel. Then run /ticket panel #your-channel to post the 'Open Ticket' button embed. Members click it to open a private ticket. Support staff need a role set via the support_role option in /ticket setup."
+    },
+    {
+      "q": "How do I set up welcome messages?",
+      "a": "Use /welcome set channel:#welcome-channel message:Welcome {user} to {server}! Available placeholders: {user} (mention), {username}, {server}, {count} (member count). You can also set a leave message with /welcome leave."
+    },
+    {
+      "q": "How do I set up reaction roles?",
+      "a": "Use /reactionroles add message:<message_id> emoji:⭐ role:@RoleName in the channel where the message is. Members can then react to get the role automatically. Use /reactionroles list to see all configured reaction roles."
+    },
+    {
+      "q": "How do I set up the starboard?",
+      "a": "Starboard is a premium feature. Run /starboard setup channel:#starboard threshold:3 emoji:⭐ to configure it. When a message gets enough ⭐ reactions, it gets reposted to the starboard channel. Use /starboard status to check your current configuration."
+    },
+    {
+      "q": "How do I enable no-prefix mode?",
+      "a": "No-prefix mode is a premium feature. Run /noprefix enable to turn it on — the bot will then respond to commands without any prefix. Use /noprefix allow role:@Role or /noprefix allow user:@User to restrict who can use no-prefix commands."
+    },
+    {
+      "q": "How do I set up join-to-create (J2C) voice channels?",
+      "a": "J2C is premium. Create a voice channel as your 'hub', then run /j2c setup #your-hub-channel. When any member joins that channel, the bot instantly creates a private temp voice channel for them. Use {user} in the template for their name. Temp channels auto-delete when empty."
+    },
+    {
+      "q": "How do I set up automod?",
+      "a": "Automod is premium. Use /automod enable, then configure rules: /automod words add <word> for a word filter, /automod spam to enable anti-spam, /automod caps <percent> for caps detection, /automod mentions <limit> for mention flood protection. Set a log channel with /automod logchannel #channel."
+    },
+    {
+      "q": "How does the AI assistant work?",
+      "a": "The AI assistant (premium) lets you describe server actions in plain English. Type /ai timeout @user 1h for spamming and it will plan and execute the action. Destructive actions (ban, kick, purge) show a preview first and require you to click Approve. Use /ailog to see a history of all AI runs."
+    },
+    {
+      "q": "How do I get premium?",
+      "a": "Contact the bot owner to activate premium for your server. Premium unlocks: AI Assistant (/ai), automod, starboard, no-prefix mode, join-to-create voice channels, and confession system."
+    },
+    {
+      "q": "How do I change the bot's prefix?",
+      "a": "Run /setprefix <new_prefix> — for example /setprefix ! to switch to !command format. The default prefix is %. You can always use slash commands (/) regardless of the prefix."
+    },
+    {
+      "q": "How does XP and leveling work?",
+      "a": "You earn 1 XP per message with a 60-second cooldown. Your level is automatically calculated from your XP. Use /rank to see your XP and level, /leaderboard to see the top members, and /profile for your full stats including coins and daily streak."
+    },
+    {
+      "q": "How do daily rewards and coins work?",
+      "a": "Run /daily once per day to claim coins. Your streak increases each consecutive day you claim — higher streaks give bonus coins. Use /profile to see your total coins and current streak."
+    },
+    {
+      "q": "How do I set AFK status?",
+      "a": "Run /afk [reason] to go AFK. The bot will reply to anyone who mentions you with your AFK reason and how long you've been away. Your AFK status is automatically removed when you send your next message."
+    },
+    {
+      "q": "How do I snipe a deleted message?",
+      "a": "Run /snipe or %snipe in any channel to see the most recently deleted message in that channel. The snipe cache is per-channel and resets when the bot restarts."
+    },
+    {
+      "q": "How do reminders work?",
+      "a": "Run /remind 2h Check on the giveaway to set a reminder. Supported durations: 10m, 2h, 1d, 1w etc. The bot will DM you when the time is up. Reminders survive bot restarts."
+    },
+    {
+      "q": "How do giveaways work?",
+      "a": "Run /giveaway start and fill in prize, duration, and winner count. Optionally require a specific role, set a minimum account age, or give bonus entries to a role. The bot posts the giveaway embed and picks winners automatically when it ends. Use /giveaway reroll to pick new winners."
+    },
+    {
+      "q": "How do I add users to a ticket?",
+      "a": "Inside an open ticket channel, run /ticket add @user to give someone access to the ticket. Use /ticket remove @user to remove them. The ticket creator and support role always have access."
+    },
+    {
+      "q": "How do I view the mod log?",
+      "a": "First set a mod-log channel with /logs #channel. After that, all bans, kicks, timeouts, warnings, and member join/leave events are automatically sent there. Use /history @user to see a member's full moderation history."
+    },
+    {
+      "q": "What permissions does the bot need?",
+      "a": "The bot needs Administrator permission for full functionality, or at minimum: Manage Roles, Manage Channels, Manage Messages, Ban Members, Kick Members, Moderate Members, View Channels, Send Messages, Embed Links, Read Message History, Add Reactions. Run /setupcheck to verify all permissions are correctly set."
+    },
+    {
+      "q": "The bot is not responding to prefix commands. What do I do?",
+      "a": "Check the current prefix with /setupcheck. The default prefix is %. Make sure MESSAGE_CONTENT_INTENT_ENABLED is set to true in the bot's environment — without it, prefix commands don't work. Slash commands (/) always work regardless."
+    },
+    {
+      "q": "Why is the bot not posting to the starboard?",
+      "a": "Check /starboard status to confirm it's enabled and the channel + emoji are set correctly. Make sure the bot has Send Messages and Embed Links permissions in the starboard channel. The reaction emoji must match exactly what's configured — custom emojis use the <:name:id> format."
+    },
+    {
+      "q": "How do I set up birthdays?",
+      "a": "Run /birthday setchannel #channel to set where birthday announcements go. Members register their birthday with /birthday set month:12 day:25. The bot will post a birthday message on their day. You can optionally set a birthday role that gets added on the day."
+    },
+    {
+      "q": "How do confession submissions work?",
+      "a": "Enable confessions with /confession setup channel:#confessions. Members run /confession submit and type their message anonymously. If you set a review_channel, confessions go to mods for approval first. Approved confessions are posted anonymously with a number."
+    },
+    {
+      "q": "How do I use the embed builder?",
+      "a": "Run /embed to open an interactive embed builder. You can set title, description, color, image, and fields step by step. Use /embedtemplate to save and reuse embed designs. Templates support variables like {user}, {server}, {count} for dynamic content."
+    },
+    {
+      "q": "How do I use custom commands?",
+      "a": "Run /customcmd add name:hello response:Hello there! to create a custom command. Members can then trigger it with %hello (or whatever the prefix is). Use /customcmd list to see all custom commands and /customcmd remove name:hello to delete one."
+    },
+    {
+      "q": "What is tempban?",
+      "a": "Tempban (/tempban @user duration reason) bans a member for a set time then automatically unbans them. Supports durations like 1h, 12h, 7d, 2w. The unban is scheduled and survives bot restarts. The AI can also do tempbans with tempban_member."
+    },
+    {
+      "q": "How do I lock down all channels at once?",
+      "a": "Use /lockdown to lock all text channels simultaneously. Run /lockdown unlock to restore them. This is useful during raids. Individual channels can be locked with /lock #channel."
+    },
+    {
+      "q": "How do tags work?",
+      "a": "Tags are quick-reply snippets. Create one with /tag create name:rules content:Please read #rules. Then anyone can use /tag get name:rules to quickly post it. Useful for FAQ answers, onboarding info, or repeated announcements."
+    }
+  ],
+  "setup_guides": {
+    "quick_start": {
+      "title": "Quick Start (5 minutes)",
+      "steps": [
+        "Run /setupcheck — verify the bot has all required permissions",
+        "Run /logs #mod-log — set where moderation events are logged",
+        "Run /welcome set channel:#welcome — configure welcome messages (optional)",
+        "Run /setprefix ! — change prefix if you want something other than % (optional)",
+        "Done — /ban, /kick, /mute, /warn, and all slash commands are ready to use"
+      ]
+    },
+    "ticket_system": {
+      "title": "Ticket System Setup",
+      "steps": [
+        "Run /ticket setup — bot auto-creates Support category and transcript channel",
+        "Optional: /ticket setup support_role:@Support to ping your support team",
+        "Run /ticket panel #support — posts the 'Open Ticket' button in that channel",
+        "Members click the button to open a private ticket channel",
+        "Close tickets with the Close button inside the ticket — transcript saved automatically"
+      ]
+    },
+    "reaction_roles": {
+      "title": "Reaction Roles Setup",
+      "steps": [
+        "Create or find the message you want to attach roles to",
+        "Copy the message ID (right-click message → Copy Message ID)",
+        "Run /reactionroles add message:<id> emoji:🎮 role:@Gamers",
+        "Repeat for each emoji/role pair you want",
+        "Members react to get the role, unreact to remove it"
+      ]
+    },
+    "starboard": {
+      "title": "Starboard Setup (Premium)",
+      "steps": [
+        "Create a #starboard channel in your server",
+        "Run /starboard setup channel:#starboard threshold:3",
+        "Optionally change the emoji: /starboard emoji ⭐",
+        "When a message gets 3 (or your chosen threshold) star reactions, it gets posted to #starboard",
+        "Use /starboard status to check configuration, /starboard disable to pause it"
+      ]
+    },
+    "j2c": {
+      "title": "Join-to-Create Voice Channels (Premium)",
+      "steps": [
+        "Create a new voice channel named 'Create a VC' or similar",
+        "Run /j2c setup #create-a-vc template:{user}'s Channel",
+        "When a member joins that hub channel, bot instantly creates a temp voice channel for them",
+        "The member gets ownership and can manage it with /j2cpanel",
+        "The temp channel auto-deletes when everyone leaves"
+      ]
+    },
+    "automod": {
+      "title": "AutoMod Setup (Premium)",
+      "steps": [
+        "Run /automod enable to turn on automod",
+        "Run /automod logchannel #mod-log to set where violations are logged",
+        "Add bad words: /automod words add word1,word2,word3",
+        "Enable anti-spam: /automod spam (deletes if 5+ messages in 5 seconds)",
+        "Set caps limit: /automod caps 70 (deletes if 70%+ of message is caps)",
+        "Set mention limit: /automod mentions 5 (deletes if 5+ mentions in one message)"
+      ]
+    },
+    "ai_assistant": {
+      "title": "AI Assistant Setup (Premium)",
+      "steps": [
+        "Ensure GROQ_API_KEY or OPENAI_API_KEY is set in your environment",
+        "Run /ai what can you do? to test it works",
+        "Use natural language: /ai timeout @spammer 1h for spam and delete their last 20 messages",
+        "Destructive actions (ban/kick/purge) show a preview — click Approve to confirm",
+        "View AI action history with /ailog",
+        "Add GROQ_API_KEY_2 and GROQ_API_KEY_3 for automatic fallback if credits run out"
+      ]
+    }
+  },
+  "troubleshooting": {
+    "bot_not_responding": "Check /setupcheck for permission issues. Ensure the bot role is high enough in the role hierarchy. For prefix commands, MESSAGE_CONTENT_INTENT_ENABLED must be true.",
+    "starboard_not_posting": "Run /starboard status to verify it's enabled. Check the bot has Send Messages + Embed Links in the starboard channel. Confirm the emoji matches exactly (⭐ vs custom emoji format).",
+    "tickets_not_opening": "The bot needs Manage Channels permission. Run /ticket setup again if the category was deleted. Check the bot can see and send in the panel channel.",
+    "reaction_roles_not_working": "The bot needs Manage Roles permission and its role must be above the role being assigned. Use /reactionroles list to verify the setup is saved correctly.",
+    "ai_not_working": "Run /setupcheck and check AI status. Ensure GROQ_API_KEY or OPENAI_API_KEY is set. If it says 'all keys exhausted', add GROQ_API_KEY_2 with a fresh key.",
+    "prefix_commands_broken": "Set MESSAGE_CONTENT_INTENT_ENABLED=true in your environment and restart the bot. Without this intent, the bot cannot read message content for prefix commands.",
+    "j2c_not_creating_channels": "The bot needs Manage Channels and Move Members permissions. Run /j2c list to confirm the hub is registered. The hub channel must be a voice channel.",
+    "welcome_not_sending": "Run /welcome status to check the channel is configured. Ensure the bot can Send Messages and Embed Links in the welcome channel."
   }
 }
