@@ -9,35 +9,41 @@ const VOTE_XP_REWARD = 100;
 const VOTE_STREAK_BONUS = 50;
 const VOTE_PREMIUM_HOURS = 16;
 const VOTE_PREMIUM_MS = VOTE_PREMIUM_HOURS * 60 * 60 * 1000;
-const STREAK_RESET_WINDOW_MS = 36 * 60 * 60 * 1000; // streak resets if no vote within 36h
+const STREAK_RESET_WINDOW_MS = 36 * 60 * 60 * 1000;
 
 export function registerTopggWebhook(app, client) {
     app.post("/topgg/webhook", (req, res) => {
-        // ── Respond IMMEDIATELY so Top.gg never times out ──────────────────────
+        // Respond IMMEDIATELY so Top.gg never times out
         res.status(200).end();
 
         const { user: userId, type } = req.body ?? {};
-        const secret = process.env.TOPGG_WEBHOOK_SECRET;
+        const secret = process.env.TOPGG_WEBHOOK_SECRET?.trim();
         const incomingAuth = (req.headers?.authorization ?? req.headers?.["x-topgg-authorization"] ?? "").trim();
 
-        // ── Handle test pings ───────────────────────────────────────────────────
-        // Top.gg "Send Test" button sends either type:"test" or a real-looking
-        // upvote payload — but always WITHOUT the Authorization header.
-        // Treat any request with no auth header (or explicit type:"test") as a
-        // connectivity check: log success, skip reward processing.
-        if (type === "test" || !incomingAuth) {
-            console.log("[TopGG] ✅ Test ping received — webhook is reachable! (no auth header = Top.gg dashboard test)");
+        // Explicit test ping from the Top.gg dashboard ("Send Test" with type:"test")
+        if (type === "test") {
+            console.log("[TopGG] ✅ Test ping received — webhook is connected and reachable!");
             return;
         }
 
-        // ── Validate auth for real vote events ──────────────────────────────────
+        // Auth validation rules:
+        //   • secret set  + header present  → must match (reject if not)
+        //   • secret set  + header absent   → accept but warn (Top.gg dashboard hasn't had
+        //     its "Webhook Auth" field filled in to match TOPGG_WEBHOOK_SECRET)
+        //   • secret not set               → accept all (warn once)
         if (secret) {
-            if (incomingAuth !== secret.trim()) {
-                console.warn(`[TopGG] Auth rejected — incoming header: "${incomingAuth.slice(0, 30)}"`);
+            if (incomingAuth && incomingAuth !== secret) {
+                // Header is present but wrong — genuine auth failure
+                console.warn(`[TopGG] Auth rejected — header mismatch: "${incomingAuth.slice(0, 30)}"`);
                 return;
             }
+            if (!incomingAuth) {
+                // Real votes from Top.gg arrive without auth when no webhook password is
+                // set on the Top.gg dashboard side. Accept, but advise the user.
+                console.warn("[TopGG] Note: TOPGG_WEBHOOK_SECRET is set but no auth header in request — accepting anyway. To enforce auth, set the same value as your Top.gg dashboard → Webhooks → Authorization.");
+            }
         } else {
-            console.warn("[TopGG] Warning: TOPGG_WEBHOOK_SECRET is not set — accepting all requests. Set it to match your Top.gg dashboard password.");
+            console.warn("[TopGG] Warning: TOPGG_WEBHOOK_SECRET not set — accepting all requests. Set it to match your Top.gg dashboard password.");
         }
 
         console.log(`[TopGG] Webhook received — type: ${type}, userId: ${userId}`);
@@ -47,7 +53,7 @@ export function registerTopggWebhook(app, client) {
             return;
         }
 
-        // ── Process vote async (fire and forget — response already sent) ───────
+        // Fire-and-forget — response already sent above
         processVote(client, userId).catch(err => {
             console.error("[TopGG] Error processing vote:", err);
         });
@@ -61,10 +67,8 @@ async function processVote(client, userId) {
     const voteUrl = `https://top.gg/bot/${botId}/vote`;
     console.log(`[TopGG] Processing vote for user ${userId}...`);
 
-    // ── 1. Update vote record with correct streak logic ────────────────────────
+    // 1. Streak + totals
     const [existing] = await db.select().from(voteRecordsTable).where(eq(voteRecordsTable.userId, userId));
-
-    // Reset streak if the last vote was more than 36 hours ago (missed a window)
     const streakExpired = existing?.lastVotedAt
         ? Date.now() - existing.lastVotedAt.getTime() > STREAK_RESET_WINDOW_MS
         : false;
@@ -78,7 +82,7 @@ async function processVote(client, userId) {
             set: { lastVotedAt: new Date(), voteStreak: streak, totalVotes: total },
         });
 
-    // ── 2. Credit coins + XP ───────────────────────────────────────────────────
+    // 2. Coins + XP
     const coinsEarned = VOTE_COIN_REWARD + streak * VOTE_STREAK_BONUS;
     try {
         await db.update(memberStatsTable).set({
@@ -88,7 +92,7 @@ async function processVote(client, userId) {
         }).where(eq(memberStatsTable.userId, userId));
     } catch (e) { console.warn("[TopGG] Coins/XP credit failed:", e.message); }
 
-    // ── 3. Mutual guilds ───────────────────────────────────────────────────────
+    // 3. Mutual guilds
     const mutualGuilds = [];
     for (const guild of client.guilds.cache.values()) {
         const member = guild.members.cache.get(userId)
@@ -97,7 +101,7 @@ async function processVote(client, userId) {
     }
     const expiresAt = new Date(Date.now() + VOTE_PREMIUM_MS);
 
-    // ── 4. DM voter ────────────────────────────────────────────────────────────
+    // 4. DM the voter
     const user = await client.users.fetch(userId).catch(() => null);
     if (user) {
         try {
@@ -133,21 +137,25 @@ async function processVote(client, userId) {
             }
         } catch (e) { console.warn("[TopGG] Failed to DM voter:", e.message); }
 
-        // One-shot reminder
+        // Schedule 12h reminder to vote again
         try {
             const [optIn] = await db.select().from(voteReminderOptInTable).where(eq(voteReminderOptInTable.userId, userId));
             if (optIn?.optedIn !== false) scheduleVoteReminder(client, userId, streak);
         } catch {}
+    } else {
+        console.warn(`[TopGG] Could not fetch user ${userId} — DM skipped`);
     }
 
-    // ── 5. Vote log channel + owner DMs ───────────────────────────────────────
+    // 5. Vote log channel + owner DMs
     const logEmbed = new EmbedBuilder().setColor(0x5865f2).setTitle("🗳️ New Vote!")
         .addFields(
-            { name: "User", value: user ? `${user.tag} (<@${userId}>)` : userId, inline: true },
-            { name: "Streak", value: streakExpired ? `🔥 1 (reset — missed window)` : `🔥 ${streak}`, inline: true },
+            { name: "User", value: user ? `${user.tag} (<@${userId}>)` : `Unknown (${userId})`, inline: true },
+            { name: "Streak", value: streakExpired ? `🔥 1 (reset)` : `🔥 ${streak}`, inline: true },
             { name: "Total Votes", value: `${total}`, inline: true },
             { name: "Coins Earned", value: `🪙 ${coinsEarned}`, inline: true },
-            { name: "Server Premium", value: mutualGuilds.length > 0 ? `Offered to ${mutualGuilds.length} guild(s): ${mutualGuilds.map(g => g.name).join(", ").slice(0, 200)}` : "No shared servers", inline: false },
+            { name: "Server Premium", value: mutualGuilds.length > 0
+                ? `Offered to ${mutualGuilds.length} guild(s): ${mutualGuilds.map(g => g.name).join(", ").slice(0, 200)}`
+                : "No shared servers", inline: false },
         ).setTimestamp();
 
     const logChannelId = process.env.VOTE_LOG_CHANNEL_ID;
@@ -158,19 +166,24 @@ async function processVote(client, userId) {
                 await ch.send({ embeds: [logEmbed] });
                 console.log(`[TopGG] Vote log sent to #${ch.name}`);
             } else {
-                console.warn(`[TopGG] Channel ${logChannelId} not found or not text-based`);
+                console.warn(`[TopGG] VOTE_LOG_CHANNEL_ID=${logChannelId} not found or not a text channel`);
             }
         } catch (e) { console.error("[TopGG] Vote log channel error:", e.message); }
+    } else {
+        console.log("[TopGG] No VOTE_LOG_CHANNEL_ID set — skipping log channel post");
     }
 
-    const ownerIds = [...new Set([...(process.env.BOT_OWNERS ?? "").split(",").map(s => s.trim()).filter(Boolean), "1298631508533313536"])];
+    const ownerIds = [...new Set([
+        ...(process.env.BOT_OWNERS ?? "").split(",").map(s => s.trim()).filter(Boolean),
+        "1298631508533313536",
+    ])];
     for (const ownerId of ownerIds) {
         if (ownerId === userId) continue;
         try { const owner = await client.users.fetch(ownerId); await owner.send({ embeds: [logEmbed] }); }
         catch {}
     }
 
-    console.log(`[TopGG] ✅ Vote fully processed for ${userId} (streak: ${streak}, total: ${total}${streakExpired ? " — streak was reset" : ""})`);
+    console.log(`[TopGG] ✅ Vote fully processed for ${userId} (streak: ${streak}, total: ${total}${streakExpired ? " — streak reset" : ""})`);
 }
 
 async function activatePremium(guildId, userId, userTag, expiresAt) {
