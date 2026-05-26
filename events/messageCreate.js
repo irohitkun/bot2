@@ -39,7 +39,7 @@ export async function execute(message) {
     const [afkEntry] = await db.select().from(afkUsersTable).where(and(eq(afkUsersTable.userId, message.author.id), eq(afkUsersTable.guildId, guildId)));
     if (afkEntry) {
         await db.delete(afkUsersTable).where(and(eq(afkUsersTable.userId, message.author.id), eq(afkUsersTable.guildId, guildId)));
-        await message.reply("👋 Welcome back! Your AFK status has been removed.").catch(() => { });
+        try { await message.reply("👋 Welcome back! Your AFK status has been removed."); } catch { }
     }
     for (const mentioned of message.mentions.users.values()) {
         if (mentioned.bot)
@@ -47,7 +47,7 @@ export async function execute(message) {
         const [mentionedAfk] = await db.select().from(afkUsersTable).where(and(eq(afkUsersTable.userId, mentioned.id), eq(afkUsersTable.guildId, guildId)));
         if (mentionedAfk) {
             const elapsed = Math.floor((Date.now() - mentionedAfk.setAt.getTime()) / 60000);
-            await message.reply(`💤 **${mentioned.tag}** is AFK: ${mentionedAfk.reason} (${elapsed}m ago)`).catch(() => { });
+            try { await message.reply(`💤 **${mentioned.tag}** is AFK: ${mentionedAfk.reason} (${elapsed}m ago)`); } catch { }
         }
     }
     const [automod] = await db.select().from(automodSettingsTable).where(eq(automodSettingsTable.guildId, guildId));
@@ -57,15 +57,19 @@ export async function execute(message) {
             const banned = automod.badWords.split(",").filter(Boolean);
             if (banned.some((w) => content.includes(w))) {
                 await message.delete().catch(() => { });
-                const warn = await message.channel.send(`⚠️ ${message.author}, that word is not allowed here.`);
-                setTimeout(() => warn.delete().catch(() => { }), 5000);
+                try {
+                    const warn = await message.channel.send(`⚠️ ${message.author}, that word is not allowed here.`);
+                    setTimeout(() => warn.delete().catch(() => { }), 5000);
+                } catch { }
                 return;
             }
         }
         if (automod.maxMentions > 0 && message.mentions.users.size >= automod.maxMentions) {
             await message.delete().catch(() => { });
-            const warn = await message.channel.send(`⚠️ ${message.author}, too many mentions!`);
-            setTimeout(() => warn.delete().catch(() => { }), 5000);
+            try {
+                const warn = await message.channel.send(`⚠️ ${message.author}, too many mentions!`);
+                setTimeout(() => warn.delete().catch(() => { }), 5000);
+            } catch { }
             return;
         }
         if (automod.maxCapsPercent > 0 && message.content.length > 10) {
@@ -73,8 +77,10 @@ export async function execute(message) {
             const pct = (caps / message.content.replace(/\s/g, "").length) * 100;
             if (pct >= automod.maxCapsPercent) {
                 await message.delete().catch(() => { });
-                const warn = await message.channel.send(`⚠️ ${message.author}, too many caps!`);
-                setTimeout(() => warn.delete().catch(() => { }), 5000);
+                try {
+                    const warn = await message.channel.send(`⚠️ ${message.author}, too many caps!`);
+                    setTimeout(() => warn.delete().catch(() => { }), 5000);
+                } catch { }
                 return;
             }
         }
@@ -87,8 +93,10 @@ export async function execute(message) {
             spamTracker.set(key, recent);
             if (recent.length >= 5) {
                 await message.delete().catch(() => { });
-                const warn = await message.channel.send(`⚠️ ${message.author}, slow down! You're sending messages too fast.`);
-                setTimeout(() => warn.delete().catch(() => { }), 5000);
+                try {
+                    const warn = await message.channel.send(`⚠️ ${message.author}, slow down! You're sending messages too fast.`);
+                    setTimeout(() => warn.delete().catch(() => { }), 5000);
+                } catch { }
                 return;
             }
         }
@@ -135,6 +143,6 @@ export async function execute(message) {
     }
     catch (err) {
         console.error(`Error in prefix command ${prefix}${commandName}:`, err);
-        await message.reply("❌ An error occurred while running that command.").catch(() => { });
+        try { await message.reply("❌ An error occurred while running that command."); } catch { }
     }
 }
