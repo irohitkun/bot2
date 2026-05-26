@@ -17,18 +17,20 @@ export function registerTopggWebhook(app, client) {
         res.status(200).end();
 
         const { user: userId, type } = req.body ?? {};
+        const secret = process.env.TOPGG_WEBHOOK_SECRET;
+        const incomingAuth = (req.headers?.authorization ?? req.headers?.["x-topgg-authorization"] ?? "").trim();
 
-        // ── Allow test pings through without auth ───────────────────────────────
-        // Top.gg's "Send Test" doesn't always include the Authorization header.
-        // We just confirm connectivity and return — no reward processing needed.
-        if (type === "test") {
-            console.log("[TopGG] ✅ Test ping OK — webhook is connected and reachable!");
+        // ── Handle test pings ───────────────────────────────────────────────────
+        // Top.gg "Send Test" button sends either type:"test" or a real-looking
+        // upvote payload — but always WITHOUT the Authorization header.
+        // Treat any request with no auth header (or explicit type:"test") as a
+        // connectivity check: log success, skip reward processing.
+        if (type === "test" || !incomingAuth) {
+            console.log("[TopGG] ✅ Test ping received — webhook is reachable! (no auth header = Top.gg dashboard test)");
             return;
         }
 
-        // ── Validate auth for real events ───────────────────────────────────────
-        const secret = process.env.TOPGG_WEBHOOK_SECRET;
-        const incomingAuth = (req.headers?.authorization ?? req.headers?.["x-topgg-authorization"] ?? "").trim();
+        // ── Validate auth for real vote events ──────────────────────────────────
         if (secret) {
             if (incomingAuth !== secret.trim()) {
                 console.warn(`[TopGG] Auth rejected — incoming header: "${incomingAuth.slice(0, 30)}"`);
@@ -103,7 +105,7 @@ async function processVote(client, userId) {
                 await user.send({ embeds: [new EmbedBuilder()
                     .setColor(0xf1c40f).setTitle("✅ Thanks for Voting!")
                     .setURL(voteUrl)
-                    .setDescription(`**Rewards:**\n🪙 ${coinsEarned} coins  •  ⭐ ${VOTE_XP_REWARD} XP  •  🏆 ${VOTE_PREMIUM_HOURS}h Premium\n\nYou're not in any server with Crux. Join one, then run \`/vote check\`.\n\n🔥 Streak: **${streak}**  |  Total: **${total}**`)
+                    .setDescription(`**Rewards:**\n🪙 ${coinsEarned} coins  •  ⭐ ${VOTE_XP_REWARD} XP  •  🏆 ${VOTE_PREMIUM_HOURS}h Premium\n\nYou're not in any server with this bot. Join one, then run \`/vote check\`.\n\n🔥 Streak: **${streak}**  |  Total: **${total}**`)
                     .setTimestamp()] }).catch(() => {});
             } else if (mutualGuilds.length === 1) {
                 await activatePremium(mutualGuilds[0].id, userId, user.tag, expiresAt);
