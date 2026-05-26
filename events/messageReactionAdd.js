@@ -55,60 +55,96 @@ async function handleStarboard(reaction, guild, emoji) {
     if (!settings) return;
 
     if (emoji !== settings.emoji) return;
-    if (reaction.message.channelId === settings.channelId) return;
 
-    const starCount = reaction.count ?? 0;
     const msg = reaction.message;
+
+    // Don't star messages inside the starboard channel itself
+    if (msg.channelId === settings.channelId) return;
+
+    // reaction.count can be null on very first fetch; fall back to 0
+    const starCount = reaction.count ?? 0;
 
     const [existing] = await db.select().from(starboardEntriesTable)
         .where(eq(starboardEntriesTable.messageId, msg.id));
 
-    const starboardChannel = guild.channels.cache.get(settings.channelId)
-        ?? await guild.channels.fetch(settings.channelId).catch(() => null);
-    if (!starboardChannel?.isTextBased()) return;
-
-    const embed = buildStarboardEmbed(msg, starCount, settings);
-
+    // ── Update existing entry ────────────────────────────────────────────────
     if (existing) {
+        await db.update(starboardEntriesTable)
+            .set({ starCount })
+            .where(eq(starboardEntriesTable.messageId, msg.id));
+
+        // Edit the starboard post if one exists
         if (existing.starboardMessageId) {
-            const sbMsg = await starboardChannel.messages.fetch(existing.starboardMessageId).catch(() => null);
+            const starboardChannel = guild.channels.cache.get(settings.channelId)
+                ?? await guild.channels.fetch(settings.channelId).catch(() => null);
+            if (!starboardChannel?.isTextBased()) return;
+
+            const sbMsg = await starboardChannel.messages
+                .fetch(existing.starboardMessageId)
+                .catch(() => null);
             if (sbMsg) {
+                const embed = buildStarboardEmbed(msg, starCount, settings);
                 await sbMsg.edit({
                     content: buildStarboardHeader(starCount, settings, msg.channelId),
                     embeds: [embed],
                 }).catch(() => {});
             }
         }
-        await db.update(starboardEntriesTable).set({ starCount }).where(eq(starboardEntriesTable.messageId, msg.id));
         return;
     }
 
+    // ── New entry — only post if threshold is met ────────────────────────────
     if (starCount < settings.threshold) return;
 
+    const starboardChannel = guild.channels.cache.get(settings.channelId)
+        ?? await guild.channels.fetch(settings.channelId).catch(() => null);
+    if (!starboardChannel?.isTextBased()) return;
+
+    // Insert FIRST to claim the slot and prevent duplicate posts from
+    // concurrent reactions arriving at the same time.
+    try {
+        await db.insert(starboardEntriesTable).values({
+            messageId: msg.id,
+            guildId: guild.id,
+            channelId: msg.channelId,
+            authorId: msg.author?.id ?? "unknown",
+            starboardMessageId: null,
+            starCount,
+        });
+    } catch {
+        // Another concurrent handler already inserted this entry.
+        // Just update the count and exit — no duplicate post.
+        await db.update(starboardEntriesTable)
+            .set({ starCount })
+            .where(eq(starboardEntriesTable.messageId, msg.id))
+            .catch(() => {});
+        return;
+    }
+
+    // We own this entry — now send the starboard post
+    const embed = buildStarboardEmbed(msg, starCount, settings);
     const sbMsg = await starboardChannel.send({
         content: buildStarboardHeader(starCount, settings, msg.channelId),
         embeds: [embed],
     }).catch(() => null);
 
-    await db.insert(starboardEntriesTable).values({
-        messageId: msg.id,
-        guildId: guild.id,
-        channelId: msg.channelId,
-        authorId: msg.author?.id ?? "unknown",
-        starboardMessageId: sbMsg?.id ?? null,
-        starCount,
-    });
+    if (sbMsg) {
+        await db.update(starboardEntriesTable)
+            .set({ starboardMessageId: sbMsg.id })
+            .where(eq(starboardEntriesTable.messageId, msg.id))
+            .catch(() => {});
+    }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getStarRating(count, threshold) {
     const ratio = count / Math.max(threshold, 1);
-    if (ratio >= 10) return { stars: 5, label: "⭐⭐⭐⭐⭐", color: 0xff4500 }; // Legendary
-    if (ratio >= 5)  return { stars: 4, label: "⭐⭐⭐⭐",   color: 0xff7700 }; // Excellent
-    if (ratio >= 3)  return { stars: 3, label: "⭐⭐⭐",     color: 0xff9900 }; // Great
-    if (ratio >= 2)  return { stars: 2, label: "⭐⭐",       color: 0xffbb00 }; // Good
-    return                   { stars: 1, label: "⭐",         color: 0xffd700 }; // Notable
+    if (ratio >= 10) return { stars: 5, label: "⭐⭐⭐⭐⭐", color: 0xff4500 };
+    if (ratio >= 5)  return { stars: 4, label: "⭐⭐⭐⭐",   color: 0xff7700 };
+    if (ratio >= 3)  return { stars: 3, label: "⭐⭐⭐",     color: 0xff9900 };
+    if (ratio >= 2)  return { stars: 2, label: "⭐⭐",       color: 0xffbb00 };
+    return                   { stars: 1, label: "⭐",         color: 0xffd700 };
 }
 
 function buildStarboardHeader(starCount, settings, channelId) {
@@ -130,13 +166,16 @@ function buildStarboardEmbed(msg, starCount, settings) {
 
     if (msg.content) embed.setDescription(msg.content.slice(0, 4096));
 
-    // Attach first image if any
     const attachment = msg.attachments.find((a) => a.contentType?.startsWith("image/"));
     const embedImage = msg.embeds.find((e) => e.image)?.image;
     if (attachment?.url) embed.setImage(attachment.url);
     else if (embedImage?.url) embed.setImage(embedImage.url);
 
-    embed.addFields({ name: "📎 Source", value: `[Jump to message](${msg.url}) in <#${msg.channelId}>`, inline: false });
+    embed.addFields({
+        name: "📎 Source",
+        value: `[Jump to message](${msg.url}) in <#${msg.channelId}>`,
+        inline: false,
+    });
 
     return embed;
 }
