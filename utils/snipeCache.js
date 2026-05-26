@@ -13,3 +13,6 @@ export function setSnipe(channelId, message) {
 export function getSnipe(channelId) {
     return snipeCache.get(channelId) ?? null;
 }
+export function clearSnipe(channelId) {
+    return snipeCache.delete(channelId);
+}
