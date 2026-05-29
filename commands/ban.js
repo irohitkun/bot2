@@ -28,6 +28,22 @@ export async function execute(interaction) {
     if (!member.bannable) return interaction.reply({ content: "❌ I cannot ban this user — they may have a higher role than me.", flags: 64 });
     if (member.id === interaction.user.id) return interaction.reply({ content: "❌ You cannot ban yourself.", flags: 64 });
 
+    // DM before banning — after the ban they're still on Discord so DM still works,
+    // but sending before is safer in case of any race condition
+    const dmEmbed = new EmbedBuilder()
+        .setColor(0xed4245)
+        .setTitle("🔨 You have been banned")
+        .addFields(
+            { name: "Server", value: guild.name, inline: true },
+            { name: "Moderator", value: `<@${interaction.user.id}>`, inline: true },
+            { name: "Reason", value: reason },
+        )
+        .setThumbnail(guild.iconURL({ dynamic: true }))
+        .setFooter({ text: "If you believe this is a mistake, contact the server staff." })
+        .setTimestamp();
+
+    await target.send({ embeds: [dmEmbed] }).catch(() => {});
+
     await member.ban({ deleteMessageSeconds: deleteDays * 86400, reason });
 
     const [style, premium] = await Promise.all([getGuildStyle(guild.id), isPremiumGuild(guild.id)]);
