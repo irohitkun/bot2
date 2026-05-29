@@ -7,10 +7,12 @@ export const data = new SlashCommandBuilder()
     .setDescription("Lock a channel so members cannot send messages")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
     .addChannelOption((opt) => opt.setName("channel").setDescription("Channel to lock (defaults to current)").setRequired(false))
+    .addRoleOption((opt) => opt.setName("role").setDescription("Role to restrict (defaults to @everyone — use your Member role if you have one)").setRequired(false))
     .addStringOption((opt) => opt.setName("reason").setDescription("Reason for locking").setRequired(false));
 
 export async function execute(interaction) {
     const targetChannel = interaction.options.getChannel("channel") ?? interaction.channel;
+    const targetRole = interaction.options.getRole("role") ?? interaction.guild.roles.everyone;
     const reason = interaction.options.getString("reason") ?? "Channel locked by moderator";
     const guild = interaction.guild;
 
@@ -20,11 +22,12 @@ export async function execute(interaction) {
     }
 
     try {
-        await targetChannel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false }, { reason });
+        await targetChannel.permissionOverwrites.edit(targetRole, { SendMessages: false }, { reason });
     } catch (err) {
         return interaction.reply({ content: `❌ Failed to lock the channel: ${err.message}`, flags: 64 });
     }
 
+    const roleLabel = targetRole.id === guild.roles.everyone.id ? "@everyone" : `<@&${targetRole.id}>`;
     const style = await getGuildStyle(guild.id);
     const embed = new EmbedBuilder()
         .setColor(0xed4245)
@@ -32,6 +35,7 @@ export async function execute(interaction) {
         .addFields(
             { name: "Channel", value: targetChannel.toString(), inline: true },
             { name: "Moderator", value: interaction.user.tag, inline: true },
+            { name: "Restricted Role", value: roleLabel, inline: true },
             { name: "Reason", value: reason },
         )
         .setTimestamp();
@@ -44,6 +48,7 @@ export async function execute(interaction) {
         .addFields(
             { name: "Channel", value: targetChannel.toString(), inline: true },
             { name: "Moderator", value: `${interaction.user.tag} (${interaction.user.id})`, inline: true },
+            { name: "Restricted Role", value: roleLabel, inline: true },
             { name: "Reason", value: reason },
         )
         .setTimestamp()
