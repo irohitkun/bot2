@@ -61,8 +61,8 @@ async function handleStarboard(reaction, guild, emoji) {
     // Don't star messages inside the starboard channel itself
     if (msg.channelId === settings.channelId) return;
 
-    // reaction.count can be null on very first fetch; fall back to 0
-    const starCount = reaction.count ?? 0;
+    // Use the live count from the fetched reaction (never null after fetch)
+    const starCount = reaction.count ?? 1;
 
     const [existing] = await db.select().from(starboardEntriesTable)
         .where(eq(starboardEntriesTable.messageId, msg.id));
@@ -102,6 +102,9 @@ async function handleStarboard(reaction, guild, emoji) {
 
     // Insert FIRST to claim the slot and prevent duplicate posts from
     // concurrent reactions arriving at the same time.
+    // IMPORTANT: only swallow unique-constraint errors (code 23505).
+    // Any other DB error (e.g. pool drop) must be rethrown so it surfaces
+    // in the "[Starboard] Error:" log and doesn't silently skip the post.
     try {
         await db.insert(starboardEntriesTable).values({
             messageId: msg.id,
@@ -111,14 +114,20 @@ async function handleStarboard(reaction, guild, emoji) {
             starboardMessageId: null,
             starCount,
         });
-    } catch {
-        // Another concurrent handler already inserted this entry.
-        // Just update the count and exit — no duplicate post.
-        await db.update(starboardEntriesTable)
-            .set({ starCount })
-            .where(eq(starboardEntriesTable.messageId, msg.id))
-            .catch(() => {});
-        return;
+    } catch (err) {
+        // 23505 = PostgreSQL unique_violation — another concurrent handler
+        // already claimed this slot, so just update the count and exit.
+        const code = err?.code ?? err?.cause?.code;
+        if (code === "23505") {
+            await db.update(starboardEntriesTable)
+                .set({ starCount })
+                .where(eq(starboardEntriesTable.messageId, msg.id))
+                .catch(() => {});
+            return;
+        }
+        // Any other error (connection drop, etc.) — rethrow so the outer
+        // .catch() logs it as [Starboard] Error and we can diagnose it.
+        throw err;
     }
 
     // We own this entry — now send the starboard post
