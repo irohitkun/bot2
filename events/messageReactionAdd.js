@@ -9,10 +9,16 @@ export async function execute(reaction, user) {
     if (user.bot) return;
 
     if (reaction.partial) {
-        try { await reaction.fetch(); } catch { return; }
+        try { await reaction.fetch(); } catch (e) {
+            console.warn("[Starboard] Could not fetch partial reaction:", e.message);
+            return;
+        }
     }
     if (reaction.message.partial) {
-        try { await reaction.message.fetch(); } catch { return; }
+        try { await reaction.message.fetch(); } catch (e) {
+            console.warn("[Starboard] Could not fetch partial message:", e.message);
+            return;
+        }
     }
 
     const guild = reaction.message.guild;
@@ -50,19 +56,35 @@ export async function execute(reaction, user) {
 }
 
 async function handleStarboard(reaction, guild, emoji) {
-    const [settings] = await db.select().from(starboardSettingsTable)
-        .where(and(eq(starboardSettingsTable.guildId, guild.id), eq(starboardSettingsTable.enabled, true)));
-    if (!settings) return;
+    let settings;
+    try {
+        [settings] = await db.select().from(starboardSettingsTable)
+            .where(and(eq(starboardSettingsTable.guildId, guild.id), eq(starboardSettingsTable.enabled, true)));
+    } catch (err) {
+        console.warn("[Starboard] DB error fetching settings:", err.message);
+        return;
+    }
 
-    if (emoji !== settings.emoji) return;
+    if (!settings) {
+        // Uncomment the next line temporarily to debug missing settings:
+        console.warn(`[Starboard] No enabled settings found for guild ${guild.id}`);
+        return;
+    }
+
+    if (emoji !== settings.emoji) {
+        console.warn(`[Starboard] Emoji mismatch — reaction:"${emoji}" (${[...emoji].map(c=>c.codePointAt(0).toString(16)).join(',')}) vs stored:"${settings.emoji}" (${[...settings.emoji].map(c=>c.codePointAt(0).toString(16)).join(',')})`);
+        return;
+    }
 
     const msg = reaction.message;
 
-    // Don't star messages inside the starboard channel itself
-    if (msg.channelId === settings.channelId) return;
+    if (msg.channelId === settings.channelId) {
+        console.warn(`[Starboard] Ignored — message is inside the starboard channel itself`);
+        return;
+    }
 
-    // Use the live count from the fetched reaction (never null after fetch)
     const starCount = reaction.count ?? 1;
+    console.log(`[Starboard] ⭐ ${starCount}/${settings.threshold} on msg ${msg.id} in guild ${guild.id}`);
 
     const [existing] = await db.select().from(starboardEntriesTable)
         .where(eq(starboardEntriesTable.messageId, msg.id));
@@ -73,7 +95,6 @@ async function handleStarboard(reaction, guild, emoji) {
             .set({ starCount })
             .where(eq(starboardEntriesTable.messageId, msg.id));
 
-        // Edit the starboard post if one exists
         if (existing.starboardMessageId) {
             const starboardChannel = guild.channels.cache.get(settings.channelId)
                 ?? await guild.channels.fetch(settings.channelId).catch(() => null);
@@ -94,17 +115,20 @@ async function handleStarboard(reaction, guild, emoji) {
     }
 
     // ── New entry — only post if threshold is met ────────────────────────────
-    if (starCount < settings.threshold) return;
+    if (starCount < settings.threshold) {
+        console.warn(`[Starboard] Below threshold (${starCount} < ${settings.threshold}) — not posting yet`);
+        return;
+    }
 
     const starboardChannel = guild.channels.cache.get(settings.channelId)
         ?? await guild.channels.fetch(settings.channelId).catch(() => null);
-    if (!starboardChannel?.isTextBased()) return;
+    if (!starboardChannel?.isTextBased()) {
+        console.warn(`[Starboard] Channel ${settings.channelId} not found or not text-based`);
+        return;
+    }
 
-    // Insert FIRST to claim the slot and prevent duplicate posts from
-    // concurrent reactions arriving at the same time.
-    // IMPORTANT: only swallow unique-constraint errors (code 23505).
-    // Any other DB error (e.g. pool drop) must be rethrown so it surfaces
-    // in the "[Starboard] Error:" log and doesn't silently skip the post.
+    // Insert FIRST to claim the slot and prevent duplicate posts.
+    // Only swallow 23505 (unique_violation). Rethrow everything else.
     try {
         await db.insert(starboardEntriesTable).values({
             messageId: msg.id,
@@ -115,8 +139,6 @@ async function handleStarboard(reaction, guild, emoji) {
             starCount,
         });
     } catch (err) {
-        // 23505 = PostgreSQL unique_violation — another concurrent handler
-        // already claimed this slot, so just update the count and exit.
         const code = err?.code ?? err?.cause?.code;
         if (code === "23505") {
             await db.update(starboardEntriesTable)
@@ -125,19 +147,18 @@ async function handleStarboard(reaction, guild, emoji) {
                 .catch(() => {});
             return;
         }
-        // Any other error (connection drop, etc.) — rethrow so the outer
-        // .catch() logs it as [Starboard] Error and we can diagnose it.
         throw err;
     }
 
-    // We own this entry — now send the starboard post
+    console.log(`[Starboard] Posting to starboard channel ${settings.channelId}...`);
     const embed = buildStarboardEmbed(msg, starCount, settings);
     const sbMsg = await starboardChannel.send({
         content: buildStarboardHeader(starCount, settings, msg.channelId),
         embeds: [embed],
-    }).catch(() => null);
+    }).catch((e) => { console.warn("[Starboard] Failed to send message:", e.message); return null; });
 
     if (sbMsg) {
+        console.log(`[Starboard] ✅ Posted starboard message ${sbMsg.id}`);
         await db.update(starboardEntriesTable)
             .set({ starboardMessageId: sbMsg.id })
             .where(eq(starboardEntriesTable.messageId, msg.id))
