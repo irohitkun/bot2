@@ -37,14 +37,21 @@ export async function execute(interaction) {
         .from(warningsTable)
         .where(and(eq(warningsTable.guildId, guild.id), eq(warningsTable.userId, target.id)));
 
-    // Try to DM the warned user
-    await target
-        .send(
-            `⚠️ You have been warned in **${guild.name}** by ${interaction.user.tag}.\n` +
-            `**Reason:** ${reason}\n` +
-            `You now have **${totalWarnings}** warning(s).`
+    // DM the warned user as a rich embed
+    const dmEmbed = new EmbedBuilder()
+        .setColor(0xfee75c)
+        .setTitle("⚠️ You have been warned")
+        .addFields(
+            { name: "Server", value: guild.name, inline: true },
+            { name: "Moderator", value: `<@${interaction.user.id}>`, inline: true },
+            { name: "Reason", value: reason },
+            { name: "Total Warnings", value: `**${totalWarnings}**`, inline: true },
         )
-        .catch(() => {});
+        .setThumbnail(guild.iconURL({ dynamic: true }))
+        .setFooter({ text: `Server ID: ${guild.id}` })
+        .setTimestamp();
+
+    await target.send({ embeds: [dmEmbed] }).catch(() => {});
 
     const [style, premium] = await Promise.all([getGuildStyle(guild.id), isPremiumGuild(guild.id)]);
 
