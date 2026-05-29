@@ -8,6 +8,7 @@ import { invalidatePremiumCache, normalizeTier } from "../utils/permissions.js";
 import { scheduleGiveawayEnd } from "../utils/giveawayScheduler.js";
 import { recoverTempBans } from "../utils/tempBanScheduler.js";
 import { recoverTempRoles } from "../utils/tempRoleScheduler.js";
+import { recoverSlowmodeTimers } from "../utils/slowmodeScheduler.js";
 import { startVoteReminderPoller } from "../utils/voteReminder.js";
 import { loadEmojiServer } from "../utils/emojis.js";
 
@@ -42,6 +43,7 @@ export async function execute(client) {
     await recoverActiveGiveaways(client);
     await recoverTempBans(client);
     await recoverTempRoles(client);
+    await recoverSlowmodeTimers(client);
     startReminderPoller(client);
     startScheduledMessagePoller(client);
     await cleanupOrphanedJ2CChannels(client);
