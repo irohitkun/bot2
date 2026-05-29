@@ -9,16 +9,10 @@ export async function execute(reaction, user) {
     if (user.bot) return;
 
     if (reaction.partial) {
-        try { await reaction.fetch(); } catch (e) {
-            console.warn("[Starboard] Could not fetch partial reaction:", e.message);
-            return;
-        }
+        try { await reaction.fetch(); } catch { return; }
     }
     if (reaction.message.partial) {
-        try { await reaction.message.fetch(); } catch (e) {
-            console.warn("[Starboard] Could not fetch partial message:", e.message);
-            return;
-        }
+        try { await reaction.message.fetch(); } catch { return; }
     }
 
     const guild = reaction.message.guild;
@@ -56,35 +50,25 @@ export async function execute(reaction, user) {
 }
 
 async function handleStarboard(reaction, guild, emoji) {
-    let settings;
-    try {
-        [settings] = await db.select().from(starboardSettingsTable)
-            .where(and(eq(starboardSettingsTable.guildId, guild.id), eq(starboardSettingsTable.enabled, true)));
-    } catch (err) {
-        console.warn("[Starboard] DB error fetching settings:", err.message);
-        return;
-    }
+    const [settings] = await db.select().from(starboardSettingsTable)
+        .where(and(eq(starboardSettingsTable.guildId, guild.id), eq(starboardSettingsTable.enabled, true)));
+    if (!settings) return;
 
-    if (!settings) {
-        // Uncomment the next line temporarily to debug missing settings:
-        console.warn(`[Starboard] No enabled settings found for guild ${guild.id}`);
-        return;
-    }
+    // Compare the stored emoji against the reaction emoji.
+    // For custom emojis both sides use the <:name:id> / <a:name:id> format.
+    // We compare by emoji ID when both have one (robust), otherwise by full string.
+    const storedId = parseEmojiId(settings.emoji);
+    const reactionId = reaction.emoji.id ?? null;
+    const emojiMatches = storedId && reactionId
+        ? storedId === reactionId          // custom emoji — compare by ID only
+        : emoji === settings.emoji;        // unicode emoji — compare by character
 
-    if (emoji !== settings.emoji) {
-        console.warn(`[Starboard] Emoji mismatch — reaction:"${emoji}" (${[...emoji].map(c=>c.codePointAt(0).toString(16)).join(',')}) vs stored:"${settings.emoji}" (${[...settings.emoji].map(c=>c.codePointAt(0).toString(16)).join(',')})`);
-        return;
-    }
+    if (!emojiMatches) return;
 
     const msg = reaction.message;
-
-    if (msg.channelId === settings.channelId) {
-        console.warn(`[Starboard] Ignored — message is inside the starboard channel itself`);
-        return;
-    }
+    if (msg.channelId === settings.channelId) return;
 
     const starCount = reaction.count ?? 1;
-    console.log(`[Starboard] ⭐ ${starCount}/${settings.threshold} on msg ${msg.id} in guild ${guild.id}`);
 
     const [existing] = await db.select().from(starboardEntriesTable)
         .where(eq(starboardEntriesTable.messageId, msg.id));
@@ -104,10 +88,9 @@ async function handleStarboard(reaction, guild, emoji) {
                 .fetch(existing.starboardMessageId)
                 .catch(() => null);
             if (sbMsg) {
-                const embed = buildStarboardEmbed(msg, starCount, settings);
                 await sbMsg.edit({
                     content: buildStarboardHeader(starCount, settings, msg.channelId),
-                    embeds: [embed],
+                    embeds: [buildStarboardEmbed(msg, starCount, settings)],
                 }).catch(() => {});
             }
         }
@@ -115,20 +98,14 @@ async function handleStarboard(reaction, guild, emoji) {
     }
 
     // ── New entry — only post if threshold is met ────────────────────────────
-    if (starCount < settings.threshold) {
-        console.warn(`[Starboard] Below threshold (${starCount} < ${settings.threshold}) — not posting yet`);
-        return;
-    }
+    if (starCount < settings.threshold) return;
 
     const starboardChannel = guild.channels.cache.get(settings.channelId)
         ?? await guild.channels.fetch(settings.channelId).catch(() => null);
-    if (!starboardChannel?.isTextBased()) {
-        console.warn(`[Starboard] Channel ${settings.channelId} not found or not text-based`);
-        return;
-    }
+    if (!starboardChannel?.isTextBased()) return;
 
-    // Insert FIRST to claim the slot and prevent duplicate posts.
-    // Only swallow 23505 (unique_violation). Rethrow everything else.
+    // Insert FIRST to claim the slot (race-condition guard).
+    // Only swallow 23505 (unique_violation). Everything else is rethrown.
     try {
         await db.insert(starboardEntriesTable).values({
             messageId: msg.id,
@@ -150,15 +127,12 @@ async function handleStarboard(reaction, guild, emoji) {
         throw err;
     }
 
-    console.log(`[Starboard] Posting to starboard channel ${settings.channelId}...`);
-    const embed = buildStarboardEmbed(msg, starCount, settings);
     const sbMsg = await starboardChannel.send({
         content: buildStarboardHeader(starCount, settings, msg.channelId),
-        embeds: [embed],
-    }).catch((e) => { console.warn("[Starboard] Failed to send message:", e.message); return null; });
+        embeds: [buildStarboardEmbed(msg, starCount, settings)],
+    }).catch(() => null);
 
     if (sbMsg) {
-        console.log(`[Starboard] ✅ Posted starboard message ${sbMsg.id}`);
         await db.update(starboardEntriesTable)
             .set({ starboardMessageId: sbMsg.id })
             .where(eq(starboardEntriesTable.messageId, msg.id))
@@ -168,22 +142,32 @@ async function handleStarboard(reaction, guild, emoji) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/**
+ * Extract the numeric ID from a custom emoji string like <:name:12345> or <a:name:12345>.
+ * Returns null for plain unicode emojis.
+ */
+function parseEmojiId(emojiStr) {
+    const match = emojiStr?.match(/^<a?:\w+:(\d+)>$/);
+    return match ? match[1] : null;
+}
+
 function getStarRating(count, threshold) {
     const ratio = count / Math.max(threshold, 1);
-    if (ratio >= 10) return { stars: 5, label: "⭐⭐⭐⭐⭐", color: 0xff4500 };
-    if (ratio >= 5)  return { stars: 4, label: "⭐⭐⭐⭐",   color: 0xff7700 };
-    if (ratio >= 3)  return { stars: 3, label: "⭐⭐⭐",     color: 0xff9900 };
-    if (ratio >= 2)  return { stars: 2, label: "⭐⭐",       color: 0xffbb00 };
-    return                   { stars: 1, label: "⭐",         color: 0xffd700 };
+    if (ratio >= 10) return { color: 0xff4500 };
+    if (ratio >= 5)  return { color: 0xff7700 };
+    if (ratio >= 3)  return { color: 0xff9900 };
+    if (ratio >= 2)  return { color: 0xffbb00 };
+    return           { color: 0xffd700 };
 }
 
 function buildStarboardHeader(starCount, settings, channelId) {
-    const { label } = getStarRating(starCount, settings.threshold);
-    return `${settings.emoji} **${starCount}** ${label} | <#${channelId}>`;
+    // Clean format: just the configured emoji, the count, and the source channel.
+    // No extra star quality label — the emoji the server chose speaks for itself.
+    return `${settings.emoji} **${starCount}** | <#${channelId}>`;
 }
 
 function buildStarboardEmbed(msg, starCount, settings) {
-    const { color, label } = getStarRating(starCount, settings.threshold);
+    const { color } = getStarRating(starCount, settings.threshold);
 
     const embed = new EmbedBuilder()
         .setColor(color)
@@ -192,7 +176,7 @@ function buildStarboardEmbed(msg, starCount, settings) {
             iconURL: msg.author?.displayAvatarURL() ?? undefined,
         })
         .setTimestamp(msg.createdAt)
-        .setFooter({ text: `Quality: ${label} · ${starCount} ${settings.emoji} · ID: ${msg.id}` });
+        .setFooter({ text: `${starCount} ${settings.emoji} · ID: ${msg.id}` });
 
     if (msg.content) embed.setDescription(msg.content.slice(0, 4096));
 
