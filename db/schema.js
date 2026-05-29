@@ -416,6 +416,24 @@ export const starboardEntriesTable = pgTable("starboard_entries", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ── User Timezones ────────────────────────────────────────────────────────────
+
+export const userTimezonesTable = pgTable("user_timezones", {
+    userId: text("user_id").primaryKey(),
+    timezone: text("timezone").notNull(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// ── Slowmode Timers ───────────────────────────────────────────────────────────
+
+export const slowmodeTimersTable = pgTable("slowmode_timers", {
+    id: serial("id").primaryKey(),
+    guildId: text("guild_id").notNull(),
+    channelId: text("channel_id").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // ── AI Assistant Audit Log ────────────────────────────────────────────────────
 
 export const aiAssistantLogsTable = pgTable("ai_assistant_logs", {
