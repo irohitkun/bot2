@@ -20,12 +20,27 @@ export async function execute(interaction) {
     if (!member.kickable) return interaction.reply({ content: "❌ I cannot kick this user — they may have a higher role than me.", flags: 64 });
     if (member.id === interaction.user.id) return interaction.reply({ content: "❌ You cannot kick yourself.", flags: 64 });
 
+    // DM before kicking so the message can be delivered while they're still reachable
+    const dmEmbed = new EmbedBuilder()
+        .setColor(0xff9900)
+        .setTitle("👟 You have been kicked")
+        .addFields(
+            { name: "Server", value: guild.name, inline: true },
+            { name: "Moderator", value: `<@${interaction.user.id}>`, inline: true },
+            { name: "Reason", value: reason },
+        )
+        .setThumbnail(guild.iconURL({ dynamic: true }))
+        .setFooter({ text: "You can rejoin the server if you have an invite link." })
+        .setTimestamp();
+
+    await target.send({ embeds: [dmEmbed] }).catch(() => {});
+
     await member.kick(reason);
 
     const [style, premium] = await Promise.all([getGuildStyle(guild.id), isPremiumGuild(guild.id)]);
 
     const embed = new EmbedBuilder()
-        .setColor(0xfee75c)
+        .setColor(0xff9900)
         .setTitle("👟 Member Kicked")
         .addFields(
             { name: "User", value: `${target.tag} (${target.id})`, inline: true },
@@ -38,7 +53,7 @@ export async function execute(interaction) {
     applyFooter(embed, style, premium ? "" : getPremiumTip("moderation"));
     await interaction.reply({ embeds: [embed] });
     await sendModLog(guild, new EmbedBuilder()
-        .setColor(0xfee75c)
+        .setColor(0xff9900)
         .setTitle("👟 Member Kicked")
         .addFields(
             { name: "User", value: `${target.tag} (${target.id})`, inline: true },
