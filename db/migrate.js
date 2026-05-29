@@ -32,6 +32,20 @@ CREATE TABLE IF NOT EXISTS embed_templates (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     CONSTRAINT embed_templates_guild_name_unique UNIQUE (guild_id, name)
 );
+
+CREATE TABLE IF NOT EXISTS user_timezones (
+    user_id TEXT PRIMARY KEY,
+    timezone TEXT NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS slowmode_timers (
+    id SERIAL PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
 `;
 
 export async function runMigrations() {
