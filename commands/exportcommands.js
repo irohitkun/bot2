@@ -4,18 +4,17 @@
  * them as a JSON file that can be pasted directly into the top.gg dashboard
  * "Import from Discord" dialog (Commands tab → Import button).
  */
-import { SlashCommandBuilder, PermissionFlagsBits, AttachmentBuilder, REST, Routes } from "discord.js";
-import { BOT_OWNERS } from "../config/constants.js";
+import { SlashCommandBuilder, AttachmentBuilder, REST, Routes } from "discord.js";
 
 export const data = new SlashCommandBuilder()
     .setName("exportcommands")
     .setDescription("Export slash command JSON for top.gg import (bot owner only)");
 
 export async function execute(interaction) {
-    // Restrict to bot owners only
-    const ownerId = "1298631508533313536";
+    // Restrict to bot owners — hardcoded owner + optional BOT_OWNERS env var
+    const hardcodedOwner = "1298631508533313536";
     const extraOwners = (process.env.BOT_OWNERS ?? "").split(",").map(s => s.trim()).filter(Boolean);
-    const allOwners = new Set([ownerId, ...extraOwners]);
+    const allOwners = new Set([hardcodedOwner, ...extraOwners]);
 
     if (!allOwners.has(interaction.user.id)) {
         return interaction.reply({ content: "❌ This command is restricted to bot owners.", ephemeral: true });
@@ -28,11 +27,11 @@ export async function execute(interaction) {
         const clientId = interaction.client.user.id;
         const rest = new REST({ version: "10" }).setToken(token);
 
-        // Fetch the globally registered slash commands from Discord's API
+        // Fetch globally registered slash commands from Discord's API
         const commands = await rest.get(Routes.applicationCommands(clientId));
 
         if (!Array.isArray(commands) || commands.length === 0) {
-            return interaction.editReply("⚠️ No registered slash commands found. Make sure the bot has run at least once so commands are registered.");
+            return interaction.editReply("⚠️ No registered slash commands found. Make sure the bot has run at least once so commands are registered globally.");
         }
 
         // Top.gg "Import from Discord" expects the exact Discord API payload
@@ -47,8 +46,8 @@ export async function execute(interaction) {
                 `**How to add them to Top.gg:**`,
                 `1. Go to **top.gg → Your Bot → Edit → Commands**`,
                 `2. Click the **Import** button`,
-                `3. Open the attached \`commands.json\` file, copy all the text inside it`,
-                `4. Paste it into the text box and click **Import**`,
+                `3. Open the attached \`commands.json\` file, copy **all** the text`,
+                `4. Paste into the text box → click **Import**`,
             ].join("\n"),
             files: [attachment],
         });
