@@ -42,6 +42,23 @@ export async function execute(interaction) {
     const unbanAt = new Date(Date.now() + ms);
     const label = formatDuration(ms);
 
+    // DM before banning so they're notified with full details
+    const dmEmbed = new EmbedBuilder()
+        .setColor(0xf1c40f)
+        .setTitle("⏰ You have been temporarily banned")
+        .addFields(
+            { name: "Server", value: guild.name, inline: true },
+            { name: "Moderator", value: `<@${interaction.user.id}>`, inline: true },
+            { name: "Duration", value: label, inline: true },
+            { name: "Reason", value: reason },
+            { name: "Auto-unban", value: `<t:${Math.floor(unbanAt.getTime() / 1000)}:F> (<t:${Math.floor(unbanAt.getTime() / 1000)}:R>)` },
+        )
+        .setThumbnail(guild.iconURL({ dynamic: true }))
+        .setFooter({ text: "You will be automatically unbanned when the duration expires." })
+        .setTimestamp();
+
+    await target.send({ embeds: [dmEmbed] }).catch(() => {});
+
     await guild.members.ban(target.id, {
         deleteMessageSeconds: deleteDays * 86400,
         reason: `[TempBan: ${label}] ${reason} — by ${interaction.user.tag}`,
