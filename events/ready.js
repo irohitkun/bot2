@@ -1,5 +1,6 @@
 import { Events, ActivityType, EmbedBuilder } from "discord.js";
 import { registerSlashCommands } from "../utils/registerCommands.js";
+import { syncTopggCommands } from "../utils/topggSync.js";
 import { db, premiumGuildsTable, giveawaysTable, remindersTable, scheduledMessagesTable, birthdaysTable, birthdaySettingsTable, j2cTempChannelsTable } from "../db/index.js";
 import { eq, and, lte, isNotNull, lt } from "drizzle-orm";
 import { cleanupOrphanedJ2CChannels } from "./voiceStateUpdate.js";
@@ -30,6 +31,9 @@ export async function execute(client) {
     } catch (err) {
         console.error("Failed to register slash commands:", err);
     }
+
+    // Sync command list to Top.gg "Commands" tab (requires TOPGG_TOKEN env var)
+    syncTopggCommands(clientId).catch(e => console.warn("[TopGG Sync] Error:", e.message));
 
     // Load custom/animated emojis from the designated emoji server
     await loadEmojiServer();
