@@ -43,42 +43,49 @@ export async function execute(reaction, user) {
         }
     }
 
-    // ── Starboard — update count when a star is removed ───────────────────────
+    // ── Starboard — update count when the emoji is removed ───────────────────
     await handleStarboardUpdate(reaction, guild, emoji).catch((e) =>
         console.warn("[Starboard] Remove update error:", e.message)
     );
 }
 
-function getStarRating(count, threshold) {
-    const ratio = count / Math.max(threshold, 1);
-    if (ratio >= 10) return { label: "⭐⭐⭐⭐⭐", color: 0xff4500 };
-    if (ratio >= 5)  return { label: "⭐⭐⭐⭐",   color: 0xff7700 };
-    if (ratio >= 3)  return { label: "⭐⭐⭐",     color: 0xff9900 };
-    if (ratio >= 2)  return { label: "⭐⭐",       color: 0xffbb00 };
-    return                   { label: "⭐",         color: 0xffd700 };
+function parseEmojiId(emojiStr) {
+    const match = emojiStr?.match(/^<a?:\w+:(\d+)>$/);
+    return match ? match[1] : null;
 }
 
 async function handleStarboardUpdate(reaction, guild, emoji) {
     const [settings] = await db.select().from(starboardSettingsTable)
         .where(and(eq(starboardSettingsTable.guildId, guild.id), eq(starboardSettingsTable.enabled, true)));
-    if (!settings || emoji !== settings.emoji) return;
+    if (!settings) return;
+
+    // ID-based comparison for custom emojis, character-based for unicode
+    const storedId = parseEmojiId(settings.emoji);
+    const reactionId = reaction.emoji.id ?? null;
+    const emojiMatches = storedId && reactionId
+        ? storedId === reactionId
+        : emoji === settings.emoji;
+    if (!emojiMatches) return;
 
     const [existing] = await db.select().from(starboardEntriesTable)
         .where(eq(starboardEntriesTable.messageId, reaction.message.id));
     if (!existing) return;
 
     const starCount = reaction.count ?? 0;
-    await db.update(starboardEntriesTable).set({ starCount }).where(eq(starboardEntriesTable.messageId, reaction.message.id));
+    await db.update(starboardEntriesTable)
+        .set({ starCount })
+        .where(eq(starboardEntriesTable.messageId, reaction.message.id));
 
     if (existing.starboardMessageId) {
         const starboardChannel = guild.channels.cache.get(settings.channelId)
             ?? await guild.channels.fetch(settings.channelId).catch(() => null);
         if (!starboardChannel?.isTextBased()) return;
-        const sbMsg = await starboardChannel.messages.fetch(existing.starboardMessageId).catch(() => null);
+        const sbMsg = await starboardChannel.messages
+            .fetch(existing.starboardMessageId)
+            .catch(() => null);
         if (sbMsg) {
-            const { label } = getStarRating(starCount, settings.threshold);
             await sbMsg.edit({
-                content: `${settings.emoji} **${starCount}** ${label} | <#${reaction.message.channelId}>`,
+                content: `${settings.emoji} **${starCount}** | <#${reaction.message.channelId}>`,
             }).catch(() => {});
         }
     }
