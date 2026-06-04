@@ -56,7 +56,8 @@ export const helpCategories = [
             ["/rank", "View your server rank"],
             ["/daily", "Claim daily coins and XP"],
             ["/afk", "Set AFK status"],
-            ["/remind", "Create reminders"],
+            ["/remind", "Create reminders  (%remind · %r · %remindme)"],
+            ["/timer", "Set a quick countdown timer  (%timer · %t)"],
             ["/poll", "Create polls"],
             ["/embed", "Build embeds"],
             ["/translate", "Translate text"],
@@ -104,6 +105,7 @@ export const prefixCommandNames = new Set([
     "purge",
     "rank",
     "remind",
+    "timer",
     "role",
     "serverinfo",
     "setprefix",
@@ -124,6 +126,12 @@ export const prefixCommandNames = new Set([
     "colour",
     "calc",
     "calculate",
+    // remind aliases
+    "r",
+    "reminder",
+    "remindme",
+    // timer aliases
+    "t",
 ]);
 
 export const noPrefixBlockedCommandNames = new Set([
