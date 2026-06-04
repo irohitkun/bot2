@@ -1,6 +1,7 @@
 import { EmbedBuilder } from "discord.js";
 import { and, eq } from "drizzle-orm";
 import { db, remindersTable } from "../db/index.js";
+import { safeSetTimeout } from "../utils/giveawayScheduler.js";
 
 function parseDuration(input) {
     const match = input.match(/^(\d+)(s|m|h|d)$/i);
@@ -48,7 +49,7 @@ export const command = {
 
         await message.reply({ embeds: [embed] });
 
-        setTimeout(async () => {
+        safeSetTimeout(async () => {
             try {
                 await message.channel.send({ content: `⏰ <@${message.author.id}> **Reminder:** ${reminderText}` });
                 await db.delete(remindersTable).where(and(eq(remindersTable.userId, message.author.id), eq(remindersTable.message, reminderText)));
