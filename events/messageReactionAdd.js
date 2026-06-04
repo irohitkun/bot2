@@ -1,6 +1,6 @@
 import { Events, EmbedBuilder } from "discord.js";
 import { db, reactionRolesTable, starboardSettingsTable, starboardEntriesTable } from "../db/index.js";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 export const name = Events.MessageReactionAdd;
 export const once = false;
@@ -25,11 +25,11 @@ export async function execute(reaction, user) {
     // ── Reaction Roles ────────────────────────────────────────────────────────
     let row;
     try {
-        [row] = await db.select().from(reactionRolesTable)
-            .where(and(
-                eq(reactionRolesTable.messageId, reaction.message.id),
-                eq(reactionRolesTable.emoji, emoji),
-            ));
+        // Fetch all reaction-role entries for this message, then match emoji in JS.
+        // This avoids a Drizzle ORM parameter-index bug when using and(eq(), eq()).
+        const rows = await db.select().from(reactionRolesTable)
+            .where(eq(reactionRolesTable.messageId, reaction.message.id));
+        row = rows.find((r) => r.emoji === emoji);
     } catch (err) {
         console.warn("[ReactionRoles] DB error on reactionAdd lookup:", err.message);
     }
@@ -51,17 +51,14 @@ export async function execute(reaction, user) {
 
 async function handleStarboard(reaction, guild, emoji) {
     const [settings] = await db.select().from(starboardSettingsTable)
-        .where(and(eq(starboardSettingsTable.guildId, guild.id), eq(starboardSettingsTable.enabled, true)));
-    if (!settings) return;
+        .where(eq(starboardSettingsTable.guildId, guild.id));
+    if (!settings?.enabled) return;
 
-    // Compare the stored emoji against the reaction emoji.
-    // For custom emojis both sides use the <:name:id> / <a:name:id> format.
-    // We compare by emoji ID when both have one (robust), otherwise by full string.
     const storedId = parseEmojiId(settings.emoji);
     const reactionId = reaction.emoji.id ?? null;
     const emojiMatches = storedId && reactionId
-        ? storedId === reactionId          // custom emoji — compare by ID only
-        : emoji === settings.emoji;        // unicode emoji — compare by character
+        ? storedId === reactionId
+        : emoji === settings.emoji;
 
     if (!emojiMatches) return;
 
@@ -73,7 +70,6 @@ async function handleStarboard(reaction, guild, emoji) {
     const [existing] = await db.select().from(starboardEntriesTable)
         .where(eq(starboardEntriesTable.messageId, msg.id));
 
-    // ── Update existing entry ────────────────────────────────────────────────
     if (existing) {
         await db.update(starboardEntriesTable)
             .set({ starCount })
@@ -97,15 +93,12 @@ async function handleStarboard(reaction, guild, emoji) {
         return;
     }
 
-    // ── New entry — only post if threshold is met ────────────────────────────
     if (starCount < settings.threshold) return;
 
     const starboardChannel = guild.channels.cache.get(settings.channelId)
         ?? await guild.channels.fetch(settings.channelId).catch(() => null);
     if (!starboardChannel?.isTextBased()) return;
 
-    // Insert FIRST to claim the slot (race-condition guard).
-    // Only swallow 23505 (unique_violation). Everything else is rethrown.
     try {
         await db.insert(starboardEntriesTable).values({
             messageId: msg.id,
@@ -140,12 +133,6 @@ async function handleStarboard(reaction, guild, emoji) {
     }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Extract the numeric ID from a custom emoji string like <:name:12345> or <a:name:12345>.
- * Returns null for plain unicode emojis.
- */
 function parseEmojiId(emojiStr) {
     const match = emojiStr?.match(/^<a?:\w+:(\d+)>$/);
     return match ? match[1] : null;
@@ -161,8 +148,6 @@ function getStarRating(count, threshold) {
 }
 
 function buildStarboardHeader(starCount, settings, channelId) {
-    // Clean format: just the configured emoji, the count, and the source channel.
-    // No extra star quality label — the emoji the server chose speaks for itself.
     return `${settings.emoji} **${starCount}** | <#${channelId}>`;
 }
 
