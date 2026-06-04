@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 const styleCache = new Map();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-const DEFAULT_COLOR = 0x5865f2;
+const DEFAULT_COLOR = 0x9b59b6; // Purple
 
 export async function getGuildStyle(guildId) {
     const cached = styleCache.get(guildId);
