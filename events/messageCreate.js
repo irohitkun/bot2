@@ -8,6 +8,7 @@ import { db, afkUsersTable, automodSettingsTable } from "../db/index.js";
 import { awardChatXp, incrementMessageCount } from "../utils/community.js";
 import { noPrefixBlockedCommandNames } from "../utils/helpCatalog.js";
 import { getGuildStyle } from "../utils/guildStyle.js";
+import { sendModLog } from "../utils/modLog.js";
 import { eq, and } from "drizzle-orm";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const prefixCommands = new Map();
@@ -71,7 +72,8 @@ export async function execute(message) {
         const content = message.content.toLowerCase();
         if (automod.badWords) {
             const banned = automod.badWords.split(",").filter(Boolean);
-            if (banned.some((w) => content.includes(w))) {
+            const matched = banned.find((w) => content.includes(w));
+            if (matched) {
                 await message.delete().catch(() => { });
                 try {
                     const { color } = await getGuildStyle(guildId);
@@ -82,6 +84,16 @@ export async function execute(message) {
                     });
                     setTimeout(() => warn.delete().catch(() => { }), 5000);
                 } catch { }
+                sendModLog(message.guild, new EmbedBuilder()
+                    .setColor(0xed4245)
+                    .setTitle("🚫 Automod — Bad Word")
+                    .addFields(
+                        { name: "User", value: `${message.author.tag} (${message.author.id})`, inline: true },
+                        { name: "Channel", value: `<#${message.channelId}>`, inline: true },
+                        { name: "Trigger", value: `\`${matched}\``, inline: true },
+                        { name: "Message", value: message.content.slice(0, 1024) || "(empty)", inline: false },
+                    )
+                    .setTimestamp(), "Automod Log").catch(() => {});
                 return;
             }
         }
@@ -96,11 +108,21 @@ export async function execute(message) {
                 });
                 setTimeout(() => warn.delete().catch(() => { }), 5000);
             } catch { }
+            sendModLog(message.guild, new EmbedBuilder()
+                .setColor(0xed4245)
+                .setTitle("🚫 Automod — Mass Mentions")
+                .addFields(
+                    { name: "User", value: `${message.author.tag} (${message.author.id})`, inline: true },
+                    { name: "Channel", value: `<#${message.channelId}>`, inline: true },
+                    { name: "Mentions", value: `${message.mentions.users.size} (limit: ${automod.maxMentions})`, inline: true },
+                    { name: "Message", value: message.content.slice(0, 1024) || "(empty)", inline: false },
+                )
+                .setTimestamp(), "Automod Log").catch(() => {});
             return;
         }
         if (automod.maxCapsPercent > 0 && message.content.length > 10) {
             const caps = (message.content.match(/[A-Z]/g) ?? []).length;
-            const pct = (caps / message.content.replace(/\s/g, "").length) * 100;
+            const pct = Math.round((caps / message.content.replace(/\s/g, "").length) * 100);
             if (pct >= automod.maxCapsPercent) {
                 await message.delete().catch(() => { });
                 try {
@@ -112,6 +134,16 @@ export async function execute(message) {
                     });
                     setTimeout(() => warn.delete().catch(() => { }), 5000);
                 } catch { }
+                sendModLog(message.guild, new EmbedBuilder()
+                    .setColor(0xed4245)
+                    .setTitle("🚫 Automod — Excessive Caps")
+                    .addFields(
+                        { name: "User", value: `${message.author.tag} (${message.author.id})`, inline: true },
+                        { name: "Channel", value: `<#${message.channelId}>`, inline: true },
+                        { name: "Caps %", value: `${pct}% (limit: ${automod.maxCapsPercent}%)`, inline: true },
+                        { name: "Message", value: message.content.slice(0, 1024) || "(empty)", inline: false },
+                    )
+                    .setTimestamp(), "Automod Log").catch(() => {});
                 return;
             }
         }
@@ -133,6 +165,15 @@ export async function execute(message) {
                     });
                     setTimeout(() => warn.delete().catch(() => { }), 5000);
                 } catch { }
+                sendModLog(message.guild, new EmbedBuilder()
+                    .setColor(0xed4245)
+                    .setTitle("🚫 Automod — Spam Detected")
+                    .addFields(
+                        { name: "User", value: `${message.author.tag} (${message.author.id})`, inline: true },
+                        { name: "Channel", value: `<#${message.channelId}>`, inline: true },
+                        { name: "Messages", value: `${recent.length} in 5 seconds`, inline: true },
+                    )
+                    .setTimestamp(), "Automod Log").catch(() => {});
                 return;
             }
         }
