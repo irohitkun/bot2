@@ -11,6 +11,7 @@ import { recoverTempRoles } from "../utils/tempRoleScheduler.js";
 import { recoverSlowmodeTimers } from "../utils/slowmodeScheduler.js";
 import { startVoteReminderPoller } from "../utils/voteReminder.js";
 import { loadEmojiServer } from "../utils/emojis.js";
+import { getGuildStyle } from "../utils/guildStyle.js";
 
 const TIER_ICONS = { free: "🔓", premium: "⭐" };
 
@@ -70,11 +71,6 @@ async function resolveNotifyTargets(client, row) {
     return [...targets];
 }
 
-/**
- * Returns activation-method-specific renewal instructions.
- * @param {"vote"|"trial"|"admin"|string} method
- * @param {boolean} isReminder - true = expiring soon, false = already expired
- */
 function getRenewalInstructions(method, isReminder) {
     const action = isReminder ? "before it expires" : "to reactivate";
     switch (method) {
@@ -242,6 +238,7 @@ async function pollScheduledMessages(client) {
             try {
                 const channel = await client.channels.fetch(msg.channelId).catch(() => null);
                 if (channel?.isTextBased()) {
+                    // Scheduled messages are user-defined free-form content — send as-is
                     await channel.send(msg.content).catch(() => {});
                 }
             } catch (err) {
@@ -290,8 +287,18 @@ async function pollBirthdays(client) {
                 ?? await guild.channels.fetch(settings.channelId).catch(() => null);
             if (!channel?.isTextBased()) continue;
 
-            const content = settings.message.replace(/\{user\}/gi, member.toString());
-            await channel.send({ content }).catch(() => {});
+            const { color } = await getGuildStyle(bday.guildId);
+            const rawMsg = settings.message.replace(/\{user\}/gi, member.toString());
+
+            await channel.send({
+                content: member.toString(),
+                embeds: [new EmbedBuilder()
+                    .setColor(color)
+                    .setTitle("🎂 Happy Birthday!")
+                    .setDescription(rawMsg)
+                    .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
+                    .setTimestamp()],
+            }).catch(() => {});
 
             if (settings.roleId) {
                 await member.roles.add(settings.roleId, "Birthday role").catch(() => {});
@@ -324,17 +331,22 @@ async function pollReminders(client) {
 
         for (const reminder of due) {
             try {
+                const reminderEmbed = new EmbedBuilder()
+                    .setColor(0x5865f2)
+                    .setTitle("⏰ Reminder")
+                    .setDescription(`<@${reminder.userId}>\n\n${reminder.message}`)
+                    .setTimestamp();
+
                 const channel = await client.channels.fetch(reminder.channelId).catch(() => null);
-                if (channel) {
-                    await channel
-                        .send(`⏰ <@${reminder.userId}> — Reminder: **${reminder.message}**`)
-                        .catch(() => {});
+                if (channel?.isTextBased()) {
+                    await channel.send({
+                        content: `<@${reminder.userId}>`,
+                        embeds: [reminderEmbed],
+                    }).catch(() => {});
                 } else {
                     const user = await client.users.fetch(reminder.userId).catch(() => null);
                     if (user) {
-                        await user
-                            .send(`⏰ Reminder: **${reminder.message}**`)
-                            .catch(() => {});
+                        await user.send({ embeds: [reminderEmbed] }).catch(() => {});
                     }
                 }
             } catch (err) {
