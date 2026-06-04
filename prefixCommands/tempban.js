@@ -1,5 +1,5 @@
 import { EmbedBuilder, PermissionFlagsBits } from "discord.js";
-import { parseMention } from "./index.js";
+import { parseMention, autoDeleteReply, fmtUsage } from "./index.js";
 import { db, tempBansTable } from "../db/index.js";
 import { parseDuration, formatDuration } from "../utils/parseDuration.js";
 import { scheduleUnban } from "../utils/tempBanScheduler.js";
@@ -11,27 +11,32 @@ export const command = {
     usage: "%tempban <@user> <duration> [reason]",
     description: "Temporarily ban a member (e.g. %tempban @user 7d spamming)",
     async execute(message, args) {
-        if (!message.member?.permissions.has(PermissionFlagsBits.BanMembers)) {
-            return void message.reply("❌ You need **Ban Members** permission.");
-        }
-        if (!args[0] || !args[1]) return void message.reply(`Usage: \`${this.usage}\``);
+        if (!message.member?.permissions.has(PermissionFlagsBits.BanMembers))
+            return void autoDeleteReply(message, "❌ You need **Ban Members** permission.");
+        if (!args[0] || !args[1])
+            return void autoDeleteReply(message, `Usage: \`${fmtUsage(this.usage, message)}\``);
 
         const userId = parseMention(args[0]) ?? args[0];
         const durationStr = args[1];
         const reason = args.slice(2).join(" ") || "No reason provided";
 
         const ms = parseDuration(durationStr);
-        if (!ms || ms < 60_000) return void message.reply("❌ Invalid duration. Examples: `1h`, `12h`, `7d`, `2w`. Minimum: 1 minute.");
-        if (ms > 365 * 24 * 60 * 60 * 1000) return void message.reply("❌ Maximum duration is 1 year.");
+        if (!ms || ms < 60_000)
+            return void autoDeleteReply(message, "❌ Invalid duration. Examples: `1h`, `12h`, `7d`, `2w`. Minimum: 1 minute.");
+        if (ms > 365 * 24 * 60 * 60 * 1000)
+            return void autoDeleteReply(message, "❌ Maximum duration is 1 year.");
 
         const guild = message.guild;
         const target = await guild.client.users.fetch(userId).catch(() => null);
-        if (!target) return void message.reply("❌ Could not find that user.");
+        if (!target)
+            return void autoDeleteReply(message, "❌ Could not find that user.");
 
         const member = await guild.members.fetch(userId).catch(() => null);
         if (member) {
-            if (!member.bannable) return void message.reply("❌ I cannot ban this user (higher role or server owner).");
-            if (member.id === message.author.id) return void message.reply("❌ You cannot ban yourself.");
+            if (!member.bannable)
+                return void autoDeleteReply(message, "❌ I cannot ban this user (higher role or server owner).");
+            if (member.id === message.author.id)
+                return void autoDeleteReply(message, "❌ You cannot ban yourself.");
         }
 
         const label = formatDuration(ms);
