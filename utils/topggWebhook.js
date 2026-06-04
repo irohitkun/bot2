@@ -11,12 +11,19 @@ const VOTE_PREMIUM_HOURS = 16;
 const VOTE_PREMIUM_MS = VOTE_PREMIUM_HOURS * 60 * 60 * 1000;
 const STREAK_RESET_WINDOW_MS = 36 * 60 * 60 * 1000;
 
+// Top.gg can send type "upvote", "vote", or "vote.create" depending on version/config
+const UPVOTE_TYPES = new Set(["upvote", "vote", "vote.create"]);
+
 export function registerTopggWebhook(app, client) {
     app.post("/topgg/webhook", (req, res) => {
         // Respond IMMEDIATELY so Top.gg never times out
         res.status(200).end();
 
-        const { user: userId, type } = req.body ?? {};
+        const body = req.body ?? {};
+        const type = body.type;
+        // Top.gg sends the voter's ID in "user" — handle alternate field names defensively
+        const userId = body.user ?? body.userId ?? body.bot_user ?? body.voter;
+
         const secret = process.env.TOPGG_WEBHOOK_SECRET?.trim();
         const incomingAuth = (req.headers?.authorization ?? req.headers?.["x-topgg-authorization"] ?? "").trim();
 
@@ -26,20 +33,12 @@ export function registerTopggWebhook(app, client) {
             return;
         }
 
-        // Auth validation rules:
-        //   • secret set  + header present  → must match (reject if not)
-        //   • secret set  + header absent   → accept but warn (Top.gg dashboard hasn't had
-        //     its "Webhook Auth" field filled in to match TOPGG_WEBHOOK_SECRET)
-        //   • secret not set               → accept all (warn once)
         if (secret) {
             if (incomingAuth && incomingAuth !== secret) {
-                // Header is present but wrong — genuine auth failure
                 console.warn(`[TopGG] Auth rejected — header mismatch: "${incomingAuth.slice(0, 30)}"`);
                 return;
             }
             if (!incomingAuth) {
-                // Real votes from Top.gg arrive without auth when no webhook password is
-                // set on the Top.gg dashboard side. Accept, but advise the user.
                 console.warn("[TopGG] Note: TOPGG_WEBHOOK_SECRET is set but no auth header in request — accepting anyway. To enforce auth, set the same value as your Top.gg dashboard → Webhooks → Authorization.");
             }
         } else {
@@ -48,7 +47,7 @@ export function registerTopggWebhook(app, client) {
 
         console.log(`[TopGG] Webhook received — type: ${type}, userId: ${userId}`);
 
-        if (type !== "upvote" || !userId) {
+        if (!UPVOTE_TYPES.has(type) || !userId) {
             console.log(`[TopGG] Ignored — type: ${type}, userId: ${userId}`);
             return;
         }
