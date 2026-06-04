@@ -1,4 +1,4 @@
-import { Events } from "discord.js";
+import { Events, EmbedBuilder } from "discord.js";
 import { readdirSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -7,6 +7,7 @@ import { canUseNoPrefix } from "../utils/noPrefixAccess.js";
 import { db, afkUsersTable, automodSettingsTable } from "../db/index.js";
 import { awardChatXp, incrementMessageCount } from "../utils/community.js";
 import { noPrefixBlockedCommandNames } from "../utils/helpCatalog.js";
+import { getGuildStyle } from "../utils/guildStyle.js";
 import { eq, and } from "drizzle-orm";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const prefixCommands = new Map();
@@ -36,10 +37,18 @@ export async function execute(message) {
     const guildId = message.guild.id;
     // Count every non-bot guild message (fire-and-forget, never blocks the handler)
     incrementMessageCount(guildId, message.author).catch(() => {});
+
     const [afkEntry] = await db.select().from(afkUsersTable).where(and(eq(afkUsersTable.userId, message.author.id), eq(afkUsersTable.guildId, guildId)));
     if (afkEntry) {
         await db.delete(afkUsersTable).where(and(eq(afkUsersTable.userId, message.author.id), eq(afkUsersTable.guildId, guildId)));
-        try { await message.reply("👋 Welcome back! Your AFK status has been removed."); } catch { }
+        const { color } = await getGuildStyle(guildId);
+        try {
+            await message.reply({
+                embeds: [new EmbedBuilder()
+                    .setColor(color)
+                    .setDescription("👋 Welcome back! Your AFK status has been removed.")],
+            });
+        } catch { }
     }
     for (const mentioned of message.mentions.users.values()) {
         if (mentioned.bot)
@@ -47,7 +56,14 @@ export async function execute(message) {
         const [mentionedAfk] = await db.select().from(afkUsersTable).where(and(eq(afkUsersTable.userId, mentioned.id), eq(afkUsersTable.guildId, guildId)));
         if (mentionedAfk) {
             const elapsed = Math.floor((Date.now() - mentionedAfk.setAt.getTime()) / 60000);
-            try { await message.reply(`💤 **${mentioned.tag}** is AFK: ${mentionedAfk.reason} (${elapsed}m ago)`); } catch { }
+            const { color } = await getGuildStyle(guildId);
+            try {
+                await message.reply({
+                    embeds: [new EmbedBuilder()
+                        .setColor(color)
+                        .setDescription(`💤 **${mentioned.tag}** is AFK: ${mentionedAfk.reason} *(${elapsed}m ago)*`)],
+                });
+            } catch { }
         }
     }
     const [automod] = await db.select().from(automodSettingsTable).where(eq(automodSettingsTable.guildId, guildId));
@@ -58,7 +74,12 @@ export async function execute(message) {
             if (banned.some((w) => content.includes(w))) {
                 await message.delete().catch(() => { });
                 try {
-                    const warn = await message.channel.send(`⚠️ ${message.author}, that word is not allowed here.`);
+                    const { color } = await getGuildStyle(guildId);
+                    const warn = await message.channel.send({
+                        embeds: [new EmbedBuilder()
+                            .setColor(color)
+                            .setDescription(`⚠️ ${message.author}, that word is not allowed here.`)],
+                    });
                     setTimeout(() => warn.delete().catch(() => { }), 5000);
                 } catch { }
                 return;
@@ -67,7 +88,12 @@ export async function execute(message) {
         if (automod.maxMentions > 0 && message.mentions.users.size >= automod.maxMentions) {
             await message.delete().catch(() => { });
             try {
-                const warn = await message.channel.send(`⚠️ ${message.author}, too many mentions!`);
+                const { color } = await getGuildStyle(guildId);
+                const warn = await message.channel.send({
+                    embeds: [new EmbedBuilder()
+                        .setColor(color)
+                        .setDescription(`⚠️ ${message.author}, too many mentions!`)],
+                });
                 setTimeout(() => warn.delete().catch(() => { }), 5000);
             } catch { }
             return;
@@ -78,7 +104,12 @@ export async function execute(message) {
             if (pct >= automod.maxCapsPercent) {
                 await message.delete().catch(() => { });
                 try {
-                    const warn = await message.channel.send(`⚠️ ${message.author}, too many caps!`);
+                    const { color } = await getGuildStyle(guildId);
+                    const warn = await message.channel.send({
+                        embeds: [new EmbedBuilder()
+                            .setColor(color)
+                            .setDescription(`⚠️ ${message.author}, too many caps!`)],
+                    });
                     setTimeout(() => warn.delete().catch(() => { }), 5000);
                 } catch { }
                 return;
@@ -94,7 +125,12 @@ export async function execute(message) {
             if (recent.length >= 5) {
                 await message.delete().catch(() => { });
                 try {
-                    const warn = await message.channel.send(`⚠️ ${message.author}, slow down! You're sending messages too fast.`);
+                    const { color } = await getGuildStyle(guildId);
+                    const warn = await message.channel.send({
+                        embeds: [new EmbedBuilder()
+                            .setColor(color)
+                            .setDescription(`⚠️ ${message.author}, slow down! You're sending messages too fast.`)],
+                    });
                     setTimeout(() => warn.delete().catch(() => { }), 5000);
                 } catch { }
                 return;
@@ -143,6 +179,13 @@ export async function execute(message) {
     }
     catch (err) {
         console.error(`Error in prefix command ${prefix}${commandName}:`, err);
-        try { await message.reply("❌ An error occurred while running that command."); } catch { }
+        try {
+            const { color } = await getGuildStyle(guildId);
+            await message.reply({
+                embeds: [new EmbedBuilder()
+                    .setColor(color)
+                    .setDescription("❌ An error occurred while running that command.")],
+            });
+        } catch { }
     }
 }
