@@ -120,6 +120,10 @@ export const prefixCommandNames = new Set([
     "userinfo",
     "warn",
     "warnings",
+    "color",
+    "colour",
+    "calc",
+    "calculate",
 ]);
 
 export const noPrefixBlockedCommandNames = new Set([
