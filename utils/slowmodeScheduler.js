@@ -1,29 +1,15 @@
-/**
- * Slowmode Auto-Expire Scheduler
- * --------------------------------
- * Stores pending slowmode removals in the DB so they survive bot restarts.
- * On startup, `recoverSlowmodeTimers` re-schedules any that haven't fired yet.
- */
-
 import { db, slowmodeTimersTable } from "../db/index.js";
 import { eq, lt } from "drizzle-orm";
+import { safeSetTimeout } from "./giveawayScheduler.js";
 
-/** In-memory map of channelId → NodeJS timer so we can cancel on re-set. */
 const activeTimers = new Map();
 
-/**
- * Schedule a slowmode removal for a channel.
- * @param {import("discord.js").Client} client
- * @param {{ id: number, guildId: string, channelId: string, expiresAt: Date }} row
- * @param {number} ms - milliseconds until removal
- */
 export function scheduleSlowmodeRemoval(client, row, ms) {
-    // Cancel any existing timer for this channel
     const existing = activeTimers.get(row.channelId);
     if (existing) clearTimeout(existing);
 
     const delay = Math.max(0, ms);
-    const timer = setTimeout(() => removeSlowmode(client, row), delay);
+    const timer = safeSetTimeout(() => removeSlowmode(client, row), delay);
     activeTimers.set(row.channelId, timer);
 }
 
@@ -50,22 +36,16 @@ async function removeSlowmode(client, row) {
     }
 }
 
-/**
- * Called once in the ready event. Re-schedules any unexpired slowmode timers
- * that were persisted across a bot restart.
- */
 export async function recoverSlowmodeTimers(client) {
     try {
         const now = new Date();
 
-        // Clean up any already-expired timers (fire them immediately)
         const overdue = await db.select().from(slowmodeTimersTable)
             .where(lt(slowmodeTimersTable.expiresAt, now));
         for (const row of overdue) {
             await removeSlowmode(client, row);
         }
 
-        // Schedule future timers
         const pending = await db.select().from(slowmodeTimersTable);
         for (const row of pending) {
             const ms = row.expiresAt.getTime() - Date.now();
