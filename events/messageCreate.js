@@ -36,7 +36,6 @@ export async function execute(message) {
     if (!message.guild)
         return;
     const guildId = message.guild.id;
-    // Count every non-bot guild message (fire-and-forget, never blocks the handler)
     incrementMessageCount(guildId, message.author).catch(() => {});
 
     const [afkEntry] = await db.select().from(afkUsersTable).where(and(eq(afkUsersTable.userId, message.author.id), eq(afkUsersTable.guildId, guildId)));
@@ -45,24 +44,19 @@ export async function execute(message) {
         const { color } = await getGuildStyle(guildId);
         try {
             await message.reply({
-                embeds: [new EmbedBuilder()
-                    .setColor(color)
-                    .setDescription("👋 Welcome back! Your AFK status has been removed.")],
+                embeds: [new EmbedBuilder().setColor(color).setDescription("👋 Welcome back! Your AFK status has been removed.")],
             });
         } catch { }
     }
     for (const mentioned of message.mentions.users.values()) {
-        if (mentioned.bot)
-            continue;
+        if (mentioned.bot) continue;
         const [mentionedAfk] = await db.select().from(afkUsersTable).where(and(eq(afkUsersTable.userId, mentioned.id), eq(afkUsersTable.guildId, guildId)));
         if (mentionedAfk) {
             const elapsed = Math.floor((Date.now() - mentionedAfk.setAt.getTime()) / 60000);
             const { color } = await getGuildStyle(guildId);
             try {
                 await message.reply({
-                    embeds: [new EmbedBuilder()
-                        .setColor(color)
-                        .setDescription(`💤 **${mentioned.tag}** is AFK: ${mentionedAfk.reason} *(${elapsed}m ago)*`)],
+                    embeds: [new EmbedBuilder().setColor(color).setDescription(`💤 **${mentioned.tag}** is AFK: ${mentionedAfk.reason} *(${elapsed}m ago)*`)],
                 });
             } catch { }
         }
@@ -78,22 +72,18 @@ export async function execute(message) {
                 try {
                     const { color } = await getGuildStyle(guildId);
                     const warn = await message.channel.send({
-                        embeds: [new EmbedBuilder()
-                            .setColor(color)
-                            .setDescription(`⚠️ ${message.author}, that word is not allowed here.`)],
+                        embeds: [new EmbedBuilder().setColor(color).setDescription(`⚠️ ${message.author}, that word is not allowed here.`)],
                     });
                     setTimeout(() => warn.delete().catch(() => { }), 5000);
                 } catch { }
                 sendModLog(message.guild, new EmbedBuilder()
-                    .setColor(0xed4245)
-                    .setTitle("🚫 Automod — Bad Word")
+                    .setColor(0xed4245).setTitle("🚫 Automod — Bad Word")
                     .addFields(
                         { name: "User", value: `${message.author.tag} (${message.author.id})`, inline: true },
                         { name: "Channel", value: `<#${message.channelId}>`, inline: true },
                         { name: "Trigger", value: `\`${matched}\``, inline: true },
                         { name: "Message", value: message.content.slice(0, 1024) || "(empty)", inline: false },
-                    )
-                    .setTimestamp(), "Automod Log").catch(() => {});
+                    ).setTimestamp(), "Automod Log").catch(() => {});
                 return;
             }
         }
@@ -102,22 +92,18 @@ export async function execute(message) {
             try {
                 const { color } = await getGuildStyle(guildId);
                 const warn = await message.channel.send({
-                    embeds: [new EmbedBuilder()
-                        .setColor(color)
-                        .setDescription(`⚠️ ${message.author}, too many mentions!`)],
+                    embeds: [new EmbedBuilder().setColor(color).setDescription(`⚠️ ${message.author}, too many mentions!`)],
                 });
                 setTimeout(() => warn.delete().catch(() => { }), 5000);
             } catch { }
             sendModLog(message.guild, new EmbedBuilder()
-                .setColor(0xed4245)
-                .setTitle("🚫 Automod — Mass Mentions")
+                .setColor(0xed4245).setTitle("🚫 Automod — Mass Mentions")
                 .addFields(
                     { name: "User", value: `${message.author.tag} (${message.author.id})`, inline: true },
                     { name: "Channel", value: `<#${message.channelId}>`, inline: true },
                     { name: "Mentions", value: `${message.mentions.users.size} (limit: ${automod.maxMentions})`, inline: true },
                     { name: "Message", value: message.content.slice(0, 1024) || "(empty)", inline: false },
-                )
-                .setTimestamp(), "Automod Log").catch(() => {});
+                ).setTimestamp(), "Automod Log").catch(() => {});
             return;
         }
         if (automod.maxCapsPercent > 0 && message.content.length > 10) {
@@ -128,22 +114,18 @@ export async function execute(message) {
                 try {
                     const { color } = await getGuildStyle(guildId);
                     const warn = await message.channel.send({
-                        embeds: [new EmbedBuilder()
-                            .setColor(color)
-                            .setDescription(`⚠️ ${message.author}, too many caps!`)],
+                        embeds: [new EmbedBuilder().setColor(color).setDescription(`⚠️ ${message.author}, too many caps!`)],
                     });
                     setTimeout(() => warn.delete().catch(() => { }), 5000);
                 } catch { }
                 sendModLog(message.guild, new EmbedBuilder()
-                    .setColor(0xed4245)
-                    .setTitle("🚫 Automod — Excessive Caps")
+                    .setColor(0xed4245).setTitle("🚫 Automod — Excessive Caps")
                     .addFields(
                         { name: "User", value: `${message.author.tag} (${message.author.id})`, inline: true },
                         { name: "Channel", value: `<#${message.channelId}>`, inline: true },
                         { name: "Caps %", value: `${pct}% (limit: ${automod.maxCapsPercent}%)`, inline: true },
                         { name: "Message", value: message.content.slice(0, 1024) || "(empty)", inline: false },
-                    )
-                    .setTimestamp(), "Automod Log").catch(() => {});
+                    ).setTimestamp(), "Automod Log").catch(() => {});
                 return;
             }
         }
@@ -159,21 +141,17 @@ export async function execute(message) {
                 try {
                     const { color } = await getGuildStyle(guildId);
                     const warn = await message.channel.send({
-                        embeds: [new EmbedBuilder()
-                            .setColor(color)
-                            .setDescription(`⚠️ ${message.author}, slow down! You're sending messages too fast.`)],
+                        embeds: [new EmbedBuilder().setColor(color).setDescription(`⚠️ ${message.author}, slow down! You're sending messages too fast.`)],
                     });
                     setTimeout(() => warn.delete().catch(() => { }), 5000);
                 } catch { }
                 sendModLog(message.guild, new EmbedBuilder()
-                    .setColor(0xed4245)
-                    .setTitle("🚫 Automod — Spam Detected")
+                    .setColor(0xed4245).setTitle("🚫 Automod — Spam Detected")
                     .addFields(
                         { name: "User", value: `${message.author.tag} (${message.author.id})`, inline: true },
                         { name: "Channel", value: `<#${message.channelId}>`, inline: true },
                         { name: "Messages", value: `${recent.length} in 5 seconds`, inline: true },
-                    )
-                    .setTimestamp(), "Automod Log").catch(() => {});
+                    ).setTimestamp(), "Automod Log").catch(() => {});
                 return;
             }
         }
@@ -186,8 +164,7 @@ export async function execute(message) {
         const parts = message.content.slice(prefix.length).trim().split(/\s+/);
         commandName = parts.shift()?.toLowerCase();
         args = parts;
-    }
-    else if (noPrefixMode) {
+    } else if (noPrefixMode) {
         const parts = message.content.trim().split(/\s+/);
         const potentialCmd = parts[0]?.toLowerCase();
         if (prefixCommands.has(potentialCmd)) {
@@ -196,37 +173,32 @@ export async function execute(message) {
                 return;
             }
             const allowed = await canUseNoPrefix(message.member);
-            if (!allowed)
-                return;
+            if (!allowed) return;
             commandName = parts.shift()?.toLowerCase();
             args = parts;
-        }
-        else {
+        } else {
             await awardChatXp(guildId, message.author);
             return;
         }
-    }
-    else {
+    } else {
         await awardChatXp(guildId, message.author);
         return;
     }
-    if (!commandName)
-        return;
+    if (!commandName) return;
     const command = prefixCommands.get(commandName);
-    if (!command)
-        return;
+    if (!command) return;
+    // Inject the server's actual prefix so commands can show it in usage/error messages
+    message._prefix = prefix;
     try {
         await command.execute(message, args);
-    }
-    catch (err) {
+    } catch (err) {
         console.error(`Error in prefix command ${prefix}${commandName}:`, err);
         try {
             const { color } = await getGuildStyle(guildId);
-            await message.reply({
-                embeds: [new EmbedBuilder()
-                    .setColor(color)
-                    .setDescription("❌ An error occurred while running that command.")],
+            const r = await message.reply({
+                embeds: [new EmbedBuilder().setColor(color).setDescription("❌ An error occurred while running that command.")],
             });
+            setTimeout(() => r?.delete().catch(() => {}), 8000);
         } catch { }
     }
 }
